@@ -72,7 +72,8 @@ const App: React.FC = () => {
     const seedDatabase = async () => {
       try {
         const snapshot = await getDocs(giftsCollectionRef);
-        const existingDocs = new Map(snapshot.docs.map(doc => [doc.id, doc.data()]));
+        // Cast data to Gift to ensure type safety when checking properties
+        const existingDocs = new Map(snapshot.docs.map(doc => [doc.id, doc.data() as Gift]));
         
         const batch = writeBatch(db);
         let updatesCount = 0;
@@ -146,4 +147,82 @@ const App: React.FC = () => {
 
     try {
       const giftRef = doc(db, 'gifts', giftId);
-      
+      await updateDoc(giftRef, {
+        claimedBy: name,
+        claimedByUserId: user.uid,
+        isAnonymous: isAnonymous
+      });
+      setToast({ message: "Presente marcado com sucesso! Obrigado!", type: 'success' });
+    } catch (error) {
+      console.error("Error claiming gift:", error);
+      setToast({ message: "Erro ao marcar presente. Tente novamente.", type: 'error' });
+    }
+  };
+
+  const handleUnclaimGift = async (giftId: string) => {
+    if (!user) return;
+
+    try {
+      const giftRef = doc(db, 'gifts', giftId);
+      await updateDoc(giftRef, {
+        claimedBy: null,
+        claimedByUserId: null,
+        isAnonymous: false
+      });
+      setToast({ message: "Presente desmarcado com sucesso.", type: 'success' });
+    } catch (error) {
+      console.error("Error unclaiming gift:", error);
+      setToast({ message: "Erro ao desmarcar presente.", type: 'error' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-pureWhite text-serenityDark">
+        <Loader2 className="w-10 h-10 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-pureWhite text-fineBlack px-4 text-center">
+        <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
+        <h2 className="text-xl font-serif mb-2">Ops! Algo deu errado.</h2>
+        <p className="font-sans text-sm opacity-60">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-6 px-6 py-2 bg-serenity text-white rounded-sm font-sans text-sm uppercase tracking-wider hover:bg-serenityDark transition-colors"
+        >
+          Tentar Novamente
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-pureWhite selection:bg-serenity selection:text-white">
+      <Hero user={user} onLogin={handleLogin} onLogout={handleLogout} />
+      <EventDetails />
+      <GiftList 
+        gifts={gifts} 
+        currentUser={user} 
+        onClaim={handleClaimGift} 
+        onUnclaim={handleUnclaimGift}
+        onLogin={handleLogin}
+      />
+      <CashGift />
+      <Footer />
+
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default App;
