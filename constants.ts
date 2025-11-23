@@ -10,7 +10,7 @@ export const COUPLE_PHOTO = "https://images.unsplash.com/photo-1515934751635-c81
 // PIX Configuration
 export const PIX_KEY = "(75)992258902"; 
 export const PIX_HOLDER_NAME = "Gabriella & Wevelley";
-export const PIX_QR_CODE_URL = "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"; // Exemplo placeholder
+export const PIX_QR_CODE_URL = "https://i.ibb.co/4np1C1gC/QR-code-wevelley.jpg"; 
 
 export const INITIAL_GIFTS: Gift[] = [
   // --- Cama & Banho ---

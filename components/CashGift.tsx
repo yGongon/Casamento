@@ -22,7 +22,7 @@ const CashGift: React.FC = () => {
             {/* Left Side - Image/Visual */}
             <div className="md:w-2/5 bg-serenity relative h-64 md:h-auto overflow-hidden group">
               <img 
-                src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=2070&auto=format&fit=crop" 
+                src="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0f/34/dc/b8/photo0jpg.jpg?w=1000" 
                 alt="Viagem Lua de Mel" 
                 className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700"
               />

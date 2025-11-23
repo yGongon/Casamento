@@ -80,8 +80,8 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
             <div className="w-16 h-px bg-serenity mx-auto" />
             <div className="max-w-3xl mx-auto space-y-4">
                <p className="font-sans font-light text-fineBlack/70 leading-relaxed text-sm md:text-base">
-                 Essas são algumas opções da nossa lista de necessidades para nossa casa. Sinta-se à vontade para nos presentear ou não. 
-                 <br/><span className="font-medium text-serenityDark">A sua presença é o mais importante!</span>
+                 Essas são algumas opções da nossa lista de necessidades para nossa casa, sinta-se à vontade para nos presentear ou não. 
+                 <br/><span className="font-medium text-serenityDark">A sua presença é o mais importante.</span>
                </p>
                <p className="font-sans text-xs text-fineBlack/50 italic flex items-center justify-center gap-2">
                  <Info size={12} /> As imagens são meramente ilustrativas, mas preferimos itens na cor <strong className="text-fineBlack">PRETA</strong>.

@@ -81,7 +81,7 @@ const App: React.FC = () => {
       try {
         const snapshot = await getDocs(giftsCollectionRef);
         // Explicitly type the tuple to ensure Map infers types correctly
-        const existingDocs = new Map(
+        const existingDocs = new Map<string, Gift>(
           snapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
         );
         
@@ -101,15 +101,18 @@ const App: React.FC = () => {
             // Important: We must allow updating maxQuantity
             let needsUpdate = false;
             const updates: any = {};
+            
+            // Cast existingData to Gift to resolve 'unknown' type error
+            const currentGift = existingData as Gift;
 
-            if (existingData.image !== gift.image) { updates.image = gift.image; needsUpdate = true; }
-            if (existingData.name !== gift.name) { updates.name = gift.name; needsUpdate = true; }
-            if (existingData.description !== gift.description) { updates.description = gift.description; needsUpdate = true; }
-            if (existingData.category !== gift.category) { updates.category = gift.category; needsUpdate = true; }
+            if (currentGift.image !== gift.image) { updates.image = gift.image; needsUpdate = true; }
+            if (currentGift.name !== gift.name) { updates.name = gift.name; needsUpdate = true; }
+            if (currentGift.description !== gift.description) { updates.description = gift.description; needsUpdate = true; }
+            if (currentGift.category !== gift.category) { updates.category = gift.category; needsUpdate = true; }
             
             // Sync maxQuantity
             const newMax = gift.maxQuantity || 1;
-            const oldMax = existingData.maxQuantity || 1;
+            const oldMax = currentGift.maxQuantity || 1;
             if (newMax !== oldMax) {
               updates.maxQuantity = newMax;
               needsUpdate = true;
