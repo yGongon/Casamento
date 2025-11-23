@@ -44,7 +44,7 @@ const EventDetails: React.FC = () => {
             </p>
 
             <div className="pt-6">
-              <a href="#" className="group/btn inline-flex flex-col items-center gap-2">
+              <a href="https://maps.app.goo.gl/7wRmoRdjNPS5XCM3A" className="group/btn inline-flex flex-col items-center gap-2">
                 <span className="inline-flex items-center gap-2 px-8 py-3 border border-fineBlack/10 rounded-sm hover:border-serenity hover:bg-serenity hover:text-white transition-all duration-300 font-sans text-xs uppercase tracking-widest shadow-sm">
                   <MapPin size={14} />
                   Ver Localização no Mapa
