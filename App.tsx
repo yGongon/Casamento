@@ -55,7 +55,7 @@ const App: React.FC = () => {
           id: doc.id
         })) as Gift[];
         
-        const sortedGifts = giftsData.sort((a, b) => Number(a.id) - Number(b.id));
+        const sortedGifts = giftsData.sort((a, b) => Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]));
         
         setGifts(sortedGifts);
         setLoading(false);
@@ -68,25 +68,46 @@ const App: React.FC = () => {
       }
     );
 
-    // Seed logic
+    // Seed logic (Updated to sync changes from constants.ts)
     const seedDatabase = async () => {
       try {
         const snapshot = await getDocs(giftsCollectionRef);
-        const existingIds = new Set(snapshot.docs.map(doc => doc.id));
+        const existingDocs = new Map(snapshot.docs.map(doc => [doc.id, doc.data()]));
         
         const batch = writeBatch(db);
         let updatesCount = 0;
         
         INITIAL_GIFTS.forEach((gift) => {
-          if (!existingIds.has(gift.id)) {
-            const docRef = doc(db, 'gifts', gift.id);
+          const docRef = doc(db, 'gifts', gift.id);
+          const existingData = existingDocs.get(gift.id);
+
+          if (!existingData) {
+            // Create new if doesn't exist
             batch.set(docRef, gift);
             updatesCount++;
+          } else {
+            // Update static fields if they changed in constants.ts
+            // This allows updating images/descriptions without resetting claimed status
+            if (
+              existingData.image !== gift.image ||
+              existingData.name !== gift.name ||
+              existingData.description !== gift.description ||
+              existingData.category !== gift.category
+            ) {
+              batch.update(docRef, {
+                image: gift.image,
+                name: gift.name,
+                description: gift.description,
+                category: gift.category
+              });
+              updatesCount++;
+            }
           }
         });
 
         if (updatesCount > 0) {
           await batch.commit();
+          console.log(`Updated ${updatesCount} gifts in database.`);
         }
       } catch (err) {
         console.warn("Seed Warning:", err);
@@ -125,98 +146,4 @@ const App: React.FC = () => {
 
     try {
       const giftRef = doc(db, 'gifts', giftId);
-      await updateDoc(giftRef, {
-        claimedBy: name,
-        claimedByUserId: user.uid,
-        isAnonymous: isAnonymous
-      });
-      setToast({ message: "Presente confirmado com sucesso! Obrigado pelo carinho.", type: 'success' });
-    } catch (error) {
-      console.error("Error claiming gift:", error);
-      setToast({ message: "Erro ao salvar. Tente novamente.", type: 'error' });
-    }
-  };
-
-  const handleUnclaimGift = async (giftId: string) => {
-    if (!user) return;
-
-    try {
-      const giftRef = doc(db, 'gifts', giftId);
-      // Reset fields
-      await updateDoc(giftRef, {
-        claimedBy: null,
-        claimedByUserId: null,
-        isAnonymous: false
-      });
-      setToast({ message: "Presente desmarcado.", type: 'success' });
-    } catch (error) {
-      console.error("Error unclaiming gift:", error);
-      setToast({ message: "Erro ao desmarcar. Tente novamente.", type: 'error' });
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-pureWhite flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-12 h-12 text-serenity animate-spin" />
-        <p className="font-serif text-serenityDark text-xl animate-pulse">Carregando detalhes do amor...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-pureWhite flex flex-col items-center justify-center space-y-6 p-4 text-center">
-        <AlertCircle className="w-16 h-16 text-serenity/50" />
-        <div className="space-y-2">
-          <h1 className="font-serif text-3xl text-fineBlack">Ops...</h1>
-          <p className="font-sans text-fineBlack/60 max-w-md">{error}</p>
-        </div>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="px-6 py-2 bg-serenity text-white rounded-sm font-sans hover:bg-serenityDark transition-colors"
-        >
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-pureWhite flex flex-col">
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
-
-      <main className="flex-grow">
-        <Hero user={user} onLogin={handleLogin} onLogout={handleLogout} />
-        
-        <EventDetails />
-        
-        {/* Transition Area */}
-        <div className="h-24 bg-gradient-to-b from-pureWhite to-serenityLight" />
-        
-        <GiftList 
-          gifts={gifts} 
-          currentUser={user}
-          onClaim={handleClaimGift} 
-          onUnclaim={handleUnclaimGift}
-          onLogin={handleLogin}
-        />
-        
-        <CashGift />
-        
-        {/* Transition Area */}
-        <div className="h-24 bg-gradient-to-b from-pureWhite to-serenityLight" />
-      </main>
       
-      <Footer />
-    </div>
-  );
-};
-
-export default App;

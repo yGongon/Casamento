@@ -19,7 +19,7 @@ export const INITIAL_GIFTS: Gift[] = [
     id: 'cb-1',
     name: 'Cama Queen',
     description: 'O alicerce dos nossos sonhos e descanso diário.',
-    image: 'https://images.unsplash.com/photo-1505693416388-b0346ef4174b?auto=format&fit=crop&w=800&q=80',
+    image: 'https://i.pinimg.com/736x/ec/69/dd/ec69ddf0202b3cb30e02e650f66d5039.jpg',
     category: 'Cama & Banho',
     claimedBy: null,
     claimedByUserId: null,
@@ -206,24 +206,7 @@ export const INITIAL_GIFTS: Gift[] = [
     claimedBy: null,
     claimedByUserId: null,
   },
-  {
-    id: 'cd-16',
-    name: 'Kit de Baldes',
-    description: 'Utensílios essenciais para a rotina.',
-    image: 'https://images.unsplash.com/photo-1595475207227-31627c244792?auto=format&fit=crop&w=800&q=80',
-    category: 'Casa & Décor',
-    claimedBy: null,
-    claimedByUserId: null,
-  },
-  {
-    id: 'cd-17',
-    name: 'Cortinas',
-    description: 'Privacidade e elegância vestindo nossas janelas.',
-    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
-    category: 'Casa & Décor',
-    claimedBy: null,
-    claimedByUserId: null,
-  },
+  
   {
     id: 'cd-18',
     name: 'Espelho Decorativo',
@@ -325,15 +308,7 @@ export const INITIAL_GIFTS: Gift[] = [
     claimedBy: null,
     claimedByUserId: null,
   },
-  {
-    id: 'cz-10',
-    name: 'Aparelho de Jantar',
-    description: 'A base perfeita para nossas mesas postas.',
-    image: 'https://images.unsplash.com/photo-1626202271830-466d181467bd?auto=format&fit=crop&w=800&q=80',
-    category: 'Cozinha',
-    claimedBy: null,
-    claimedByUserId: null,
-  },
+
   {
     id: 'cz-11',
     name: 'Filtro de Água',
