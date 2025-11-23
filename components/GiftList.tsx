@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Gift } from '../types';
-import { Check, Gift as GiftIcon, X, Lock, Trash2, LogIn } from 'lucide-react';
+import { Check, Gift as GiftIcon, X, Lock, Trash2, LogIn, Info } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
 import { User } from 'firebase/auth';
 
@@ -54,7 +54,6 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
   const handleSubmitClaim = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedGiftId) {
-      // If name is empty, we treat it as anonymous if user explicitly checked, or fallback to a generic name
       let finalName = guestName.trim();
       if (finalName === '') finalName = 'Convidado';
       
@@ -79,10 +78,15 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
           <div className="text-center mb-12 space-y-6">
             <h2 className="font-serif text-4xl md:text-5xl text-fineBlack">Com Carinho</h2>
             <div className="w-16 h-px bg-serenity mx-auto" />
-            <p className="font-sans font-light text-fineBlack/70 max-w-2xl mx-auto leading-relaxed">
-              A presença de cada um já torna nosso casamento completo. Mas, se desejarem nos presentear, 
-              escolhemos alguns itens que combinam com o nosso lar.
-            </p>
+            <div className="max-w-3xl mx-auto space-y-4">
+               <p className="font-sans font-light text-fineBlack/70 leading-relaxed text-sm md:text-base">
+                 Essas são algumas opções da nossa lista de necessidades para nossa casa. Sinta-se à vontade para nos presentear ou não. 
+                 <br/><span className="font-medium text-serenityDark">A sua presença é o mais importante!</span>
+               </p>
+               <p className="font-sans text-xs text-fineBlack/50 italic flex items-center justify-center gap-2">
+                 <Info size={12} /> As imagens são meramente ilustrativas, mas preferimos itens na cor <strong className="text-fineBlack">PRETA</strong>.
+               </p>
+            </div>
             
             {!currentUser && (
                <div className="mt-4 bg-serenityLight/50 inline-block px-6 py-3 rounded-sm border border-serenity/20">
@@ -118,15 +122,27 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
           {filteredGifts.map((gift, index) => {
-            const isClaimedByMe = currentUser && gift.claimedByUserId === currentUser.uid;
-            const isClaimedByOthers = gift.claimedBy && !isClaimedByMe;
+            // Logic to handle multiple claims
+            const claims = gift.claims || [];
+            const claimedCount = claims.length;
+            const maxQuantity = gift.maxQuantity || 1;
+            const isFullyClaimed = claimedCount >= maxQuantity;
+            
+            // Check if current user claimed THIS gift (at least once)
+            const myClaim = currentUser ? claims.find(c => c.userId === currentUser.uid) : null;
+            const isClaimedByMe = !!myClaim;
+
+            // Determine display state
+            // If fully claimed AND not by me -> Show "Claimed"
+            // If fully claimed AND by me -> Show "Claimed by you"
+            // If partially claimed -> Show "Available" (Don't show quantity left to maintain surprise)
             
             return (
               <ScrollReveal key={gift.id} delay={index * 50}>
                 <div 
                   className={`group relative bg-white/80 backdrop-blur-sm border border-serenityLight rounded-sm overflow-hidden transition-all duration-500 hover:shadow-xl ${
                     isClaimedByMe ? 'border-green-200 ring-1 ring-green-100' : ''
-                  } ${isClaimedByOthers ? 'opacity-80' : 'hover:border-serenity/30'}`}
+                  } ${isFullyClaimed && !isClaimedByMe ? 'opacity-80' : 'hover:border-serenity/30'}`}
                 >
                   {/* Category Tag */}
                   <div className="absolute top-3 left-3 z-20">
@@ -140,12 +156,22 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
                     <img 
                       src={gift.image} 
                       alt={gift.name} 
-                      className={`w-full h-full object-cover transition-transform duration-700 ${gift.claimedBy ? 'grayscale opacity-60' : 'group-hover:scale-105'}`}
+                      className={`w-full h-full object-cover transition-transform duration-700 ${isFullyClaimed && !isClaimedByMe ? 'grayscale opacity-60' : 'group-hover:scale-105'}`}
                     />
-                    {gift.claimedBy && (
+                    
+                    {/* Status Overlay */}
+                    {isFullyClaimed && !isClaimedByMe && (
                       <div className="absolute inset-0 bg-white/20 flex items-center justify-center">
-                         <span className={`px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm ${isClaimedByMe ? 'bg-green-50 text-green-800 border-green-200' : 'bg-white/90 text-fineBlack border-serenity/20'}`}>
-                           {isClaimedByMe ? 'Escolhido por você' : 'Já escolhido'}
+                         <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-white/90 text-fineBlack border-serenity/20">
+                           Já escolhido
+                         </span>
+                      </div>
+                    )}
+                    
+                    {isClaimedByMe && (
+                      <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center">
+                         <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-green-50 text-green-800 border-green-200">
+                           Escolhido por você
                          </span>
                       </div>
                     )}
@@ -160,7 +186,10 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
 
                     {isClaimedByMe ? (
                        <div className="pt-4 space-y-3">
-                         <p className="text-xs text-green-600 font-sans">Você marcou este presente</p>
+                         <p className="text-xs text-green-600 font-sans">
+                           Você presenteou este item. <br/>
+                           {isAnonymous && <span className="text-fineBlack/40">(Modo Anônimo)</span>}
+                         </p>
                          <button
                            onClick={() => onUnclaim(gift.id)}
                            className="inline-flex items-center gap-2 px-6 py-2 border border-red-200 text-red-500 font-sans text-xs tracking-wider hover:bg-red-50 transition-colors rounded-sm uppercase"
@@ -169,13 +198,11 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
                            Desmarcar
                          </button>
                        </div>
-                    ) : isClaimedByOthers ? (
+                    ) : isFullyClaimed ? (
                       <div className="pt-4 border-t border-serenity/20">
                         <div className="flex items-center justify-center gap-2 text-serenityDark font-medium font-sans text-sm">
                           <Check size={16} />
-                          <span>
-                            Presenteado por: {gift.isAnonymous ? "Alguém especial" : gift.claimedBy}
-                          </span>
+                          <span>Já presenteado</span>
                         </div>
                       </div>
                     ) : (

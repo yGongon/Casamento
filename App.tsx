@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gift } from './types';
+import { Gift, GiftClaim } from './types';
 import { INITIAL_GIFTS } from './constants';
 import Hero from './components/Hero';
 import EventDetails from './components/EventDetails';
@@ -7,7 +7,7 @@ import GiftList from './components/GiftList';
 import CashGift from './components/CashGift';
 import Footer from './components/Footer';
 import { db, auth, googleProvider } from './firebase';
-import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
@@ -55,7 +55,15 @@ const App: React.FC = () => {
           id: doc.id
         })) as Gift[];
         
-        const sortedGifts = giftsData.sort((a, b) => Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]));
+        // Custom sort (by numeric part of ID)
+        const sortedGifts = giftsData.sort((a, b) => {
+           const getNum = (id: string) => {
+             const parts = id.split('-');
+             if (parts.length > 1) return parseInt(parts[1]) || 0;
+             return 0;
+           };
+           return getNum(a.id) - getNum(b.id);
+        });
         
         setGifts(sortedGifts);
         setLoading(false);
@@ -68,12 +76,14 @@ const App: React.FC = () => {
       }
     );
 
-    // Seed logic (Updated to sync changes from constants.ts)
+    // Seed logic (Updated to sync changes from constants.ts including maxQuantity)
     const seedDatabase = async () => {
       try {
         const snapshot = await getDocs(giftsCollectionRef);
-        // Cast data to Gift to ensure type safety when checking properties
-        const existingDocs = new Map(snapshot.docs.map(doc => [doc.id, doc.data() as Gift]));
+        // Explicitly type the tuple to ensure Map infers types correctly
+        const existingDocs = new Map(
+          snapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
+        );
         
         const batch = writeBatch(db);
         let updatesCount = 0;
@@ -84,23 +94,29 @@ const App: React.FC = () => {
 
           if (!existingData) {
             // Create new if doesn't exist
-            batch.set(docRef, gift);
+            batch.set(docRef, { ...gift, claims: [] }); // Initialize with empty claims
             updatesCount++;
           } else {
             // Update static fields if they changed in constants.ts
-            // This allows updating images/descriptions without resetting claimed status
-            if (
-              existingData.image !== gift.image ||
-              existingData.name !== gift.name ||
-              existingData.description !== gift.description ||
-              existingData.category !== gift.category
-            ) {
-              batch.update(docRef, {
-                image: gift.image,
-                name: gift.name,
-                description: gift.description,
-                category: gift.category
-              });
+            // Important: We must allow updating maxQuantity
+            let needsUpdate = false;
+            const updates: any = {};
+
+            if (existingData.image !== gift.image) { updates.image = gift.image; needsUpdate = true; }
+            if (existingData.name !== gift.name) { updates.name = gift.name; needsUpdate = true; }
+            if (existingData.description !== gift.description) { updates.description = gift.description; needsUpdate = true; }
+            if (existingData.category !== gift.category) { updates.category = gift.category; needsUpdate = true; }
+            
+            // Sync maxQuantity
+            const newMax = gift.maxQuantity || 1;
+            const oldMax = existingData.maxQuantity || 1;
+            if (newMax !== oldMax) {
+              updates.maxQuantity = newMax;
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              batch.update(docRef, updates);
               updatesCount++;
             }
           }
@@ -147,11 +163,48 @@ const App: React.FC = () => {
 
     try {
       const giftRef = doc(db, 'gifts', giftId);
+      const giftSnap = await getDoc(giftRef);
+      
+      if (!giftSnap.exists()) {
+        setToast({ message: "Presente não encontrado.", type: 'error' });
+        return;
+      }
+
+      const giftData = giftSnap.data() as Gift;
+      const currentClaims = giftData.claims || [];
+      const maxQuantity = giftData.maxQuantity || 1;
+
+      // Check capacity
+      if (currentClaims.length >= maxQuantity) {
+         setToast({ message: "Este presente já foi escolhido por completo.", type: 'error' });
+         return;
+      }
+
+      // Check if user already claimed THIS item (prevent double booking same item ID)
+      const hasAlreadyClaimed = currentClaims.some(c => c.userId === user.uid);
+      if (hasAlreadyClaimed) {
+        setToast({ message: "Você já escolheu este presente.", type: 'error' });
+        return;
+      }
+
+      const newClaim: GiftClaim = {
+        userId: user.uid,
+        name: name,
+        isAnonymous: isAnonymous,
+        timestamp: Date.now()
+      };
+
+      // Add to claims array
+      // Also maintain legacy fields for backward compatibility/simplicity if needed, 
+      // but UI mainly uses claims array now.
       await updateDoc(giftRef, {
-        claimedBy: name,
+        claims: arrayUnion(newClaim),
+        // We set the legacy fields to the LAST person who claimed it, or keep it generic
+        claimedBy: name, 
         claimedByUserId: user.uid,
         isAnonymous: isAnonymous
       });
+
       setToast({ message: "Presente marcado com sucesso! Obrigado!", type: 'success' });
     } catch (error) {
       console.error("Error claiming gift:", error);
@@ -164,11 +217,34 @@ const App: React.FC = () => {
 
     try {
       const giftRef = doc(db, 'gifts', giftId);
-      await updateDoc(giftRef, {
-        claimedBy: null,
-        claimedByUserId: null,
-        isAnonymous: false
-      });
+      const giftSnap = await getDoc(giftRef);
+      
+      if (!giftSnap.exists()) return;
+
+      const giftData = giftSnap.data() as Gift;
+      const currentClaims = giftData.claims || [];
+
+      // Filter out the current user's claim
+      const updatedClaims = currentClaims.filter(c => c.userId !== user.uid);
+      
+      const updates: any = {
+        claims: updatedClaims
+      };
+
+      // If no claims left, clear legacy fields
+      if (updatedClaims.length === 0) {
+        updates.claimedBy = null;
+        updates.claimedByUserId = null;
+        updates.isAnonymous = false;
+      } else {
+        // If claims remain, set legacy fields to the last remaining claim
+        const lastClaim = updatedClaims[updatedClaims.length - 1];
+        updates.claimedBy = lastClaim.name;
+        updates.claimedByUserId = lastClaim.userId;
+        updates.isAnonymous = lastClaim.isAnonymous;
+      }
+
+      await updateDoc(giftRef, updates);
       setToast({ message: "Presente desmarcado com sucesso.", type: 'success' });
     } catch (error) {
       console.error("Error unclaiming gift:", error);

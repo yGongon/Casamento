@@ -1,11 +1,22 @@
+export interface GiftClaim {
+  userId: string;
+  name: string;
+  isAnonymous: boolean;
+  timestamp: number;
+}
+
 export interface Gift {
   id: string;
   name: string;
   description: string;
   image: string;
   category: string;
-  claimedBy: string | null;
-  claimedByUserId?: string | null; // Novo campo para identificar o dono da marcação
+  maxQuantity?: number; // Default is 1
+  claims?: GiftClaim[]; // Array of claims
+  
+  // Legacy fields (kept for type compatibility if needed, but logic moves to claims array)
+  claimedBy?: string | null; 
+  claimedByUserId?: string | null;
   isAnonymous?: boolean;
 }
 
