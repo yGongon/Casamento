@@ -187,7 +187,7 @@ const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
             
             <h3 className="font-serif text-2xl text-fineBlack mb-2 text-center">Compartilhe o Amor</h3>
             <p className="font-sans text-xs text-fineBlack/60 mb-8 text-center uppercase tracking-wide">
-              Convide amigos e família
+        
             </p>
 
             <div className="space-y-3">
