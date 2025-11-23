@@ -31,7 +31,7 @@ const EventDetails: React.FC = () => {
             <div className="space-y-3">
               <h3 className="font-serif text-4xl text-fineBlack">A Bênção</h3>
               <p className="font-sans text-md font-medium text-serenityDark tracking-wider uppercase">
-                16:00 Horas
+                17:00 Horas
               </p>
             </div>
 

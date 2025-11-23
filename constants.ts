@@ -2,14 +2,14 @@ import { Gift } from './types';
 
 // Wedding Date: February 14, 2026 at 16:00
 // Note: Month is 0-indexed in JavaScript Dates (0 = January, 1 = February)
-export const WEDDING_DATE = new Date(2026, 1, 14, 16, 0, 0);
+export const WEDDING_DATE = new Date(2026, 1, 14, 17, 0, 0);
 
 // Placeholder image for the couple. Replace with the actual photo URL.
 export const COUPLE_PHOTO = "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=2070&auto=format&fit=crop";
 
 // PIX Configuration
 // Substitua pela sua chave real e pela URL da imagem do seu QR Code gerado no app do banco
-export const PIX_KEY = "000.000.000-00"; 
+export const PIX_KEY = "(75)992258902"; 
 export const PIX_HOLDER_NAME = "Gabriella & Wevelley";
 export const PIX_QR_CODE_URL = "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"; // Exemplo placeholder
 
