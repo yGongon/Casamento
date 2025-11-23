@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TimeLeft } from '../types';
 import { WEDDING_DATE, COUPLE_PHOTO } from '../constants';
-import { Heart, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { Heart, LogIn, LogOut, User as UserIcon, Share2, X, MessageCircle, Facebook, Twitter, Copy, Check } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
 import { User } from 'firebase/auth';
 
@@ -13,6 +13,8 @@ interface HeroProps {
 
 const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -43,11 +45,52 @@ const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
     year: 'numeric'
   });
 
+  const handleShare = (platform: 'whatsapp' | 'facebook' | 'twitter' | 'copy') => {
+    const url = window.location.href;
+    const text = "Gabriella & Wevelley - Venha celebrar nosso amor conosco!";
+    
+    switch (platform) {
+      case 'whatsapp':
+        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+        break;
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+        break;
+      case 'twitter':
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(url);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+        break;
+    }
+  };
+
   return (
     <header className="relative w-full min-h-screen flex flex-col items-center justify-center bg-serenityLight overflow-hidden px-4 py-12">
       
-      {/* Auth Bar */}
-      <div className="absolute top-0 left-0 w-full p-4 flex justify-end z-50">
+      {/* Auth & Actions Bar */}
+      <div className="absolute top-0 left-0 w-full p-4 flex justify-end items-center gap-3 z-50">
+        
+        {/* Share Button with Custom Tooltip */}
+        <button 
+          onClick={() => setIsShareModalOpen(true)}
+          className="group relative flex items-center gap-2 px-4 py-2 bg-white/50 hover:bg-white text-serenityDark hover:text-serenityDark/80 text-xs font-sans font-medium tracking-wider uppercase rounded-full transition-all duration-300"
+        >
+          <Share2 size={14} />
+          <span className="hidden sm:inline">Compartilhar</span>
+          
+          {/* Tooltip Element */}
+          <span className="absolute top-full right-0 mt-3 w-max px-3 py-2 bg-serenityDark text-white text-[10px] font-sans tracking-wide rounded-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 shadow-xl transform translate-y-[-5px] group-hover:translate-y-0 z-50 pointer-events-none">
+            Compartilhar este momento especial
+            <span className="absolute -top-1 right-4 w-2 h-2 bg-serenityDark transform rotate-45"></span>
+          </span>
+        </button>
+
+        {/* Divider */}
+        <div className="h-4 w-px bg-fineBlack/10"></div>
+
         {user ? (
           <div className="flex items-center gap-4">
              <div className="hidden md:flex items-center gap-2 text-serenityDark font-sans text-sm">
@@ -58,7 +101,7 @@ const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
                onClick={onLogout}
                className="flex items-center gap-2 px-4 py-2 bg-white/50 hover:bg-white text-fineBlack/60 text-xs font-sans tracking-wider uppercase rounded-full transition-all"
              >
-               <LogOut size={14} /> Sair
+               <LogOut size={14} /> <span className="hidden sm:inline">Sair</span>
              </button>
           </div>
         ) : (
@@ -66,7 +109,7 @@ const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
             onClick={onLogin}
             className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-serenity hover:text-white text-serenityDark text-xs font-sans font-medium tracking-wider uppercase rounded-full shadow-sm transition-all"
           >
-            <LogIn size={14} /> Login Convidados
+            <LogIn size={14} /> Login
           </button>
         )}
       </div>
@@ -130,6 +173,64 @@ const Hero: React.FC<HeroProps> = ({ user, onLogin, onLogout }) => {
           </div>
         </ScrollReveal>
       </div>
+
+      {/* Share Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-serenityDark/30 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm p-6 rounded-sm shadow-2xl relative animate-slide-up border border-white/50">
+            <button 
+              onClick={() => setIsShareModalOpen(false)}
+              className="absolute top-4 right-4 text-fineBlack/40 hover:text-fineBlack transition-colors"
+            >
+              <X size={20} />
+            </button>
+            
+            <h3 className="font-serif text-2xl text-fineBlack mb-2 text-center">Compartilhe o Amor</h3>
+            <p className="font-sans text-xs text-fineBlack/60 mb-8 text-center uppercase tracking-wide">
+              Convide amigos e família
+            </p>
+
+            <div className="space-y-3">
+              <button 
+                onClick={() => handleShare('whatsapp')}
+                className="w-full flex items-center justify-center gap-3 py-3 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-white rounded-sm transition-all duration-300 group"
+              >
+                <MessageCircle size={20} className="group-hover:scale-110 transition-transform" />
+                <span className="font-sans text-sm font-medium">WhatsApp</span>
+              </button>
+
+              <button 
+                onClick={() => handleShare('facebook')}
+                className="w-full flex items-center justify-center gap-3 py-3 bg-[#1877F2]/10 text-[#1877F2] hover:bg-[#1877F2] hover:text-white rounded-sm transition-all duration-300 group"
+              >
+                <Facebook size={20} className="group-hover:scale-110 transition-transform" />
+                <span className="font-sans text-sm font-medium">Facebook</span>
+              </button>
+
+              <button 
+                onClick={() => handleShare('twitter')}
+                className="w-full flex items-center justify-center gap-3 py-3 bg-black/5 text-black hover:bg-black hover:text-white rounded-sm transition-all duration-300 group"
+              >
+                <Twitter size={20} className="group-hover:scale-110 transition-transform" />
+                <span className="font-sans text-sm font-medium">Twitter</span>
+              </button>
+
+              <div className="h-px bg-gray-100 my-2" />
+
+              <button 
+                onClick={() => handleShare('copy')}
+                className="w-full flex items-center justify-center gap-3 py-3 bg-serenityLight text-serenityDark hover:bg-serenity hover:text-white rounded-sm transition-all duration-300 group"
+              >
+                {linkCopied ? <Check size={20} /> : <Copy size={20} />}
+                <span className="font-sans text-sm font-medium">
+                  {linkCopied ? 'Link Copiado!' : 'Copiar Link'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </header>
   );
 };
