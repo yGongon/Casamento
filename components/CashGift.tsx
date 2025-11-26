@@ -16,6 +16,8 @@ interface CashGiftProps {
   icon: LucideIcon;
   buttonText: string;
   reverse?: boolean;
+  pixKey?: string; // Optional custom key
+  pixQrCodeUrl?: string; // Optional custom QR Code URL
 }
 
 const CashGift: React.FC<CashGiftProps> = ({ 
@@ -27,7 +29,9 @@ const CashGift: React.FC<CashGiftProps> = ({
   image, 
   icon: Icon, 
   buttonText,
-  reverse = false
+  reverse = false,
+  pixKey,
+  pixQrCodeUrl
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -39,6 +43,10 @@ const CashGift: React.FC<CashGiftProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [newAmountInput, setNewAmountInput] = useState('');
   const [dbError, setDbError] = useState(false);
+
+  // Resolve which PIX data to use
+  const displayPixKey = pixKey || PIX_KEY;
+  const displayQrCode = pixQrCodeUrl || PIX_QR_CODE_URL;
 
   // Check Admin Status
   useEffect(() => {
@@ -77,7 +85,7 @@ const CashGift: React.FC<CashGiftProps> = ({
   }, [goalId]);
 
   const handleCopyPix = () => {
-    navigator.clipboard.writeText(PIX_KEY);
+    navigator.clipboard.writeText(displayPixKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -95,9 +103,14 @@ const CashGift: React.FC<CashGiftProps> = ({
       });
       setIsEditing(false);
       setNewAmountInput('');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating goal:", error);
-      alert("Erro ao atualizar valor. Verifique se você tem permissão.");
+      // More descriptive error for common permission issues
+      if (error.code === 'permission-denied') {
+        alert("Erro de permissão: O banco de dados bloqueou a edição. Verifique as 'Regras' no Console do Firebase.");
+      } else {
+        alert("Erro ao atualizar valor. Tente novamente.");
+      }
     }
   };
 
@@ -257,7 +270,7 @@ const CashGift: React.FC<CashGiftProps> = ({
               {/* QR Code Box */}
               <div className="bg-white p-4 border border-fineBlack/10 rounded-sm inline-block shadow-inner">
                 <img 
-                  src={PIX_QR_CODE_URL} 
+                  src={displayQrCode} 
                   alt="QR Code Pix" 
                   className="w-48 h-48 object-contain mix-blend-multiply"
                 />
@@ -267,7 +280,7 @@ const CashGift: React.FC<CashGiftProps> = ({
               <div className="bg-serenityLight/50 p-4 rounded-sm flex items-center justify-between gap-4 border border-serenity/20">
                 <div className="text-left overflow-hidden">
                   <p className="text-xs text-fineBlack/50 uppercase tracking-wider mb-1">Chave Pix</p>
-                  <p className="font-mono text-fineBlack text-sm truncate">{PIX_KEY}</p>
+                  <p className="font-mono text-fineBlack text-sm truncate">{displayPixKey}</p>
                   <p className="text-[10px] text-fineBlack/40 mt-1">{PIX_HOLDER_NAME}</p>
                 </div>
                 <button 

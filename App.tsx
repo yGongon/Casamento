@@ -315,6 +315,8 @@ const App: React.FC = () => {
         icon={Camera}
         buttonText="Contribuir para as Fotos"
         reverse={true}
+        pixKey="92e4ba26-32c9-4c98-9521-7ff2fc96621c"
+        pixQrCodeUrl="https://i.imgur.com/M9FZrur.jpeg"
       />
 
       <GiftList 
