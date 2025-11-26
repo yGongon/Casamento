@@ -26,3 +26,10 @@ export interface TimeLeft {
   minutes: number;
   seconds: number;
 }
+
+export interface CashGoal {
+  id: string;
+  title: string;
+  currentAmount: number;
+  targetAmount: number;
+}

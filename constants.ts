@@ -12,6 +12,33 @@ export const PIX_KEY = "(75)992258902";
 export const PIX_HOLDER_NAME = "Gabriella & Wevelley";
 export const PIX_QR_CODE_URL = "https://i.ibb.co/4np1C1gC/QR-code-wevelley.jpg"; 
 
+// --- ADMIN CONFIGURATION ---
+// Adicione aqui os e-mails que podem atualizar as metas financeiras
+export const ADMIN_EMAILS = [
+  "wevelleytwich@gmail.com"
+];
+
+// --- FINANCIAL GOALS CONFIGURATION ---
+export const GOAL_IDS = {
+  HONEYMOON: 'honeymoon_goal',
+  PHOTOS: 'photos_goal'
+};
+
+export const INITIAL_GOALS = [
+  {
+    id: GOAL_IDS.HONEYMOON,
+    title: 'Lua de Mel',
+    targetAmount: 8000,
+    currentAmount: 0 // Valor inicial (será atualizado via banco de dados)
+  },
+  {
+    id: GOAL_IDS.PHOTOS,
+    title: 'Fotografia',
+    targetAmount: 1500,
+    currentAmount: 0 // Valor inicial
+  }
+];
+
 export const INITIAL_GIFTS: Gift[] = [
   // --- Cama & Banho ---
   {

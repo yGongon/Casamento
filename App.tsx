@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, GiftClaim } from './types';
-import { INITIAL_GIFTS } from './constants';
+import { INITIAL_GIFTS, INITIAL_GOALS, GOAL_IDS } from './constants';
 import Hero from './components/Hero';
 import EventDetails from './components/EventDetails';
 import GiftList from './components/GiftList';
 import CashGift from './components/CashGift';
 import Footer from './components/Footer';
 import { db, auth, googleProvider } from './firebase';
-import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, setDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertCircle, Plane, Camera } from 'lucide-react';
 
 // Simple Toast Component
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
@@ -46,6 +46,7 @@ const App: React.FC = () => {
   // Database Listener
   useEffect(() => {
     const giftsCollectionRef = collection(db, 'gifts');
+    const goalsCollectionRef = collection(db, 'cash_goals');
 
     const unsubscribe = onSnapshot(
       giftsCollectionRef, 
@@ -76,17 +77,17 @@ const App: React.FC = () => {
       }
     );
 
-    // Seed logic (Updated to sync changes from constants.ts including maxQuantity)
+    // Seed logic (Updated to sync changes from constants.ts including maxQuantity and CASH GOALS)
     const seedDatabase = async () => {
       try {
-        const snapshot = await getDocs(giftsCollectionRef);
-        // Explicitly type the tuple to ensure Map infers types correctly
-        const existingDocs = new Map<string, Gift>(
-          snapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
-        );
-        
         const batch = writeBatch(db);
         let updatesCount = 0;
+
+        // 1. Seed Gifts
+        const giftsSnapshot = await getDocs(giftsCollectionRef);
+        const existingDocs = new Map<string, Gift>(
+          giftsSnapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
+        );
         
         INITIAL_GIFTS.forEach((gift) => {
           const docRef = doc(db, 'gifts', gift.id);
@@ -94,15 +95,12 @@ const App: React.FC = () => {
 
           if (!existingData) {
             // Create new if doesn't exist
-            batch.set(docRef, { ...gift, claims: [] }); // Initialize with empty claims
+            batch.set(docRef, { ...gift, claims: [] });
             updatesCount++;
           } else {
             // Update static fields if they changed in constants.ts
-            // Important: We must allow updating maxQuantity
             let needsUpdate = false;
             const updates: any = {};
-            
-            // Cast existingData to Gift to resolve 'unknown' type error
             const currentGift = existingData as Gift;
 
             if (currentGift.image !== gift.image) { updates.image = gift.image; needsUpdate = true; }
@@ -125,9 +123,22 @@ const App: React.FC = () => {
           }
         });
 
+        // 2. Seed Cash Goals
+        const goalsSnapshot = await getDocs(goalsCollectionRef);
+        const existingGoals = new Map(goalsSnapshot.docs.map(doc => [doc.id, doc.data()]));
+        
+        INITIAL_GOALS.forEach((goal) => {
+          if (!existingGoals.has(goal.id)) {
+            const goalRef = doc(db, 'cash_goals', goal.id);
+            batch.set(goalRef, goal);
+            updatesCount++;
+          }
+          // Note: We do NOT update goals if they exist, to avoid overwriting currentAmount
+        });
+
         if (updatesCount > 0) {
           await batch.commit();
-          console.log(`Updated ${updatesCount} gifts in database.`);
+          console.log(`Updated ${updatesCount} items in database.`);
         }
       } catch (err) {
         console.warn("Seed Warning:", err);
@@ -198,11 +209,9 @@ const App: React.FC = () => {
       };
 
       // Add to claims array
-      // Also maintain legacy fields for backward compatibility/simplicity if needed, 
-      // but UI mainly uses claims array now.
       await updateDoc(giftRef, {
         claims: arrayUnion(newClaim),
-        // We set the legacy fields to the LAST person who claimed it, or keep it generic
+        // Legacy support
         claimedBy: name, 
         claimedByUserId: user.uid,
         isAnonymous: isAnonymous
@@ -240,7 +249,6 @@ const App: React.FC = () => {
         updates.claimedByUserId = null;
         updates.isAnonymous = false;
       } else {
-        // If claims remain, set legacy fields to the last remaining claim
         const lastClaim = updatedClaims[updatedClaims.length - 1];
         updates.claimedBy = lastClaim.name;
         updates.claimedByUserId = lastClaim.userId;
@@ -283,6 +291,32 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-pureWhite selection:bg-serenity selection:text-white">
       <Hero user={user} onLogin={handleLogin} onLogout={handleLogout} />
       <EventDetails />
+      
+      {/* 1. Lua de Mel */}
+      <CashGift 
+        goalId={GOAL_IDS.HONEYMOON}
+        currentUser={user}
+        title="Operação Lua de Mel"
+        subtitle="Nossos Sonhos"
+        description="Se preferir não escolher um presente físico, ficaríamos imensamente felizes com sua contribuição para realizarmos a viagem dos nossos sonhos."
+        image="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0f/34/dc/b8/photo0jpg.jpg?w=1000"
+        icon={Plane}
+        buttonText="Contribuir para a Viagem"
+      />
+
+      {/* 2. Ajuda com o Fotógrafo (Reverse Layout) */}
+      <CashGift 
+        goalId={GOAL_IDS.PHOTOS}
+        currentUser={user}
+        title="Eternizando Momentos"
+        subtitle="Memórias Únicas"
+        description="Ajude-nos a guardar cada sorriso e emoção deste dia único. Sua contribuição será dedicada aos registros fotográficos que contam nossa história."
+        image="https://images.pexels.com/photos/34933461/pexels-photo-34933461.jpeg"
+        icon={Camera}
+        buttonText="Contribuir para as Fotos"
+        reverse={true}
+      />
+
       <GiftList 
         gifts={gifts} 
         currentUser={user} 
@@ -290,7 +324,7 @@ const App: React.FC = () => {
         onUnclaim={handleUnclaimGift}
         onLogin={handleLogin}
       />
-      <CashGift />
+      
       <Footer />
 
       {toast && (
