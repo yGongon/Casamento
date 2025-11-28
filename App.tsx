@@ -10,6 +10,7 @@ import { db, auth, googleProvider } from './firebase';
 import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, setDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2, CheckCircle, XCircle, AlertCircle, Plane, Camera } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 
 // Simple Toast Component
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
@@ -71,8 +72,11 @@ const App: React.FC = () => {
         setError(null);
       },
       (err) => {
-        console.error("Firebase Error:", err);
-        setError("Não foi possível carregar a lista de presentes. Verifique sua conexão.");
+        console.error("Firebase Error (Loading Gifts):", err);
+        // FALLBACK: Em vez de mostrar tela de erro, carrega os dados locais
+        // Isso previne que o site fique fora do ar se as regras do Firebase bloquearem a leitura
+        console.log("Usando lista local de presentes como fallback.");
+        setGifts(INITIAL_GIFTS);
         setLoading(false);
       }
     );
@@ -84,6 +88,7 @@ const App: React.FC = () => {
         let updatesCount = 0;
 
         // 1. Seed Gifts
+        // Note: This might fail if permissions are restricted, catch block handles it
         const giftsSnapshot = await getDocs(giftsCollectionRef);
         const existingDocs = new Map<string, Gift>(
           giftsSnapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
@@ -141,7 +146,7 @@ const App: React.FC = () => {
           console.log(`Updated ${updatesCount} items in database.`);
         }
       } catch (err) {
-        console.warn("Seed Warning:", err);
+        console.warn("Seed Warning (Isso é normal se as regras de escrita estiverem restritas):", err);
       }
     };
 
@@ -218,9 +223,42 @@ const App: React.FC = () => {
       });
 
       setToast({ message: "Presente marcado com sucesso! Obrigado!", type: 'success' });
-    } catch (error) {
+
+      // --- EMAIL NOTIFICATION CONFIGURATION ---
+      
+      const EMAILJS_SERVICE_ID = "casamentowevelley";   
+      const EMAILJS_TEMPLATE_ID = "template_l9getos"; 
+      const EMAILJS_PUBLIC_KEY = "VA3a0JkCjqXQUIec1";   
+      
+      // Validação simples
+      if (EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
+          const emailParams = {
+            to_email: 'wevelleytwich@gmail.com',
+            gift_name: giftData.name,
+            guest_name: name,
+            guest_email: user.email,
+            is_anonymous: isAnonymous ? '(Marcado como anônimo no site)' : '',
+            timestamp: new Date().toLocaleString('pt-BR')
+          };
+
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams, EMAILJS_PUBLIC_KEY)
+            .then(() => console.log('Notificação de email enviada'))
+            .catch((err) => {
+              console.warn('Falha ao enviar notificação de email:', err);
+              if (err.text?.includes("insufficient authentication scopes") || err.status === 412) {
+                console.error("ERRO CRÍTICO EMAILJS (412): Reconecte o Gmail no painel do EmailJS e MARQUE a caixa 'Enviar email em meu nome'.");
+              }
+            });
+      }
+      // --------------------------------
+
+    } catch (error: any) {
       console.error("Error claiming gift:", error);
-      setToast({ message: "Erro ao marcar presente. Tente novamente.", type: 'error' });
+      if (error.code === 'permission-denied') {
+        setToast({ message: "Erro de permissão: Você precisa estar logado e as regras do banco de dados devem permitir escrita.", type: 'error' });
+      } else {
+        setToast({ message: "Erro ao marcar presente. Tente novamente.", type: 'error' });
+      }
     }
   };
 
@@ -271,6 +309,8 @@ const App: React.FC = () => {
     );
   }
 
+  // Com o fallback implementado acima, essa tela de erro dificilmente aparecerá,
+  // mas mantemos como segurança para erros críticos não relacionados ao Firestore.
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-pureWhite text-fineBlack px-4 text-center">
