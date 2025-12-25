@@ -21,9 +21,12 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({ children, className = "", d
           observer.disconnect();
         }
       },
-      // Threshold reduzido para 0.05 para disparar mais cedo
-      // rootMargin ajustado para não "segurar" o surgimento na parte inferior
-      { threshold: 0.05, rootMargin: "0px 0px -20px 0px" }
+      { 
+        threshold: 0.01, 
+        // rootMargin de 100px faz com que o item comece a animar 
+        // ANTES mesmo de entrar na área visível do navegador
+        rootMargin: "0px 0px 100px 0px" 
+      }
     );
 
     if (ref.current) {
@@ -36,8 +39,8 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({ children, className = "", d
   return (
     <div
       ref={ref}
-      className={`transition-all duration-[700ms] ease-[cubic-bezier(0.25,1,0.5,1)] transform ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      className={`transition-all duration-[400ms] ease-out transform ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
       } ${className}`}
     >
       {children}
