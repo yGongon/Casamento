@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Gift } from '../types';
 import { Check, Gift as GiftIcon, X, Lock, Trash2, LogIn, Info } from 'lucide-react';
@@ -36,6 +37,16 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
     if (selectedCategory === 'Todos') return gifts;
     return gifts.filter(g => g.category === selectedCategory);
   }, [gifts, selectedCategory]);
+
+  // Group gifts in chunks of 6 (2 rows on desktop/tablet)
+  const giftChunks = useMemo(() => {
+    const size = 6;
+    const chunks = [];
+    for (let i = 0; i < filteredGifts.length; i += size) {
+      chunks.push(filteredGifts.slice(i, i + size));
+    }
+    return chunks;
+  }, [filteredGifts]);
 
   const handleOpenModal = (giftId: string) => {
     if (!currentUser) {
@@ -119,106 +130,98 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
           </div>
         </ScrollReveal>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
-          {filteredGifts.map((gift, index) => {
-            // Logic to handle multiple claims
-            const claims = gift.claims || [];
-            const claimedCount = claims.length;
-            const maxQuantity = gift.maxQuantity || 1;
-            const isFullyClaimed = claimedCount >= maxQuantity;
-            
-            // Check if current user claimed THIS gift (at least once)
-            const myClaim = currentUser ? claims.find(c => c.userId === currentUser.uid) : null;
-            const isClaimedByMe = !!myClaim;
+        {/* Grid revealed in chunks of 6 (2 rows) */}
+        <div className="space-y-8 md:space-y-12">
+          {giftChunks.map((chunk, chunkIndex) => (
+            <ScrollReveal key={chunkIndex} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+              {chunk.map((gift) => {
+                const claims = gift.claims || [];
+                const claimedCount = claims.length;
+                const maxQuantity = gift.maxQuantity || 1;
+                const isFullyClaimed = claimedCount >= maxQuantity;
+                const myClaim = currentUser ? claims.find(c => c.userId === currentUser.uid) : null;
+                const isClaimedByMe = !!myClaim;
 
-            // Determine display state
-            // If fully claimed AND not by me -> Show "Claimed"
-            // If fully claimed AND by me -> Show "Claimed by you"
-            // If partially claimed -> Show "Available" (Don't show quantity left to maintain surprise)
-            
-            return (
-              <ScrollReveal key={gift.id} delay={index * 50}>
-                <div 
-                  className={`group relative bg-white/80 backdrop-blur-sm border border-serenityLight rounded-sm overflow-hidden transition-all duration-500 hover:shadow-xl ${
-                    isClaimedByMe ? 'border-green-200 ring-1 ring-green-100' : ''
-                  } ${isFullyClaimed && !isClaimedByMe ? 'opacity-80' : 'hover:border-serenity/30'}`}
-                >
-                  {/* Category Tag */}
-                  <div className="absolute top-3 left-3 z-20">
-                    <span className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[10px] uppercase tracking-widest font-sans text-fineBlack/70 shadow-sm rounded-sm">
-                      {gift.category}
-                    </span>
-                  </div>
+                return (
+                  <div 
+                    key={gift.id}
+                    className={`group relative bg-white/80 backdrop-blur-sm border border-serenityLight rounded-sm overflow-hidden transition-all duration-500 hover:shadow-xl ${
+                      isClaimedByMe ? 'border-green-200 ring-1 ring-green-100' : ''
+                    } ${isFullyClaimed && !isClaimedByMe ? 'opacity-80' : 'hover:border-serenity/30'}`}
+                  >
+                    {/* Category Tag */}
+                    <div className="absolute top-3 left-3 z-20">
+                      <span className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[10px] uppercase tracking-widest font-sans text-fineBlack/70 shadow-sm rounded-sm">
+                        {gift.category}
+                      </span>
+                    </div>
 
-                  {/* Image */}
-                  <div className="aspect-[4/3] overflow-hidden relative">
-                    <img 
-                      src={gift.image} 
-                      alt={gift.name} 
-                      className={`w-full h-full object-cover transition-transform duration-700 ${isFullyClaimed && !isClaimedByMe ? 'grayscale opacity-60' : 'group-hover:scale-105'}`}
-                    />
-                    
-                    {/* Status Overlay */}
-                    {isFullyClaimed && !isClaimedByMe && (
-                      <div className="absolute inset-0 bg-white/20 flex items-center justify-center">
-                         <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-white/90 text-fineBlack border-serenity/20">
-                           Já escolhido
-                         </span>
-                      </div>
-                    )}
-                    
-                    {isClaimedByMe && (
-                      <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center">
-                         <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-green-50 text-green-800 border-green-200">
-                           Escolhido por você
-                         </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-8 text-center space-y-4">
-                    <h3 className="font-serif text-2xl text-fineBlack">{gift.name}</h3>
-                    <p className="font-sans text-sm font-light text-fineBlack/60 leading-relaxed min-h-[3rem]">
-                      {gift.description}
-                    </p>
-
-                    {isClaimedByMe ? (
-                       <div className="pt-4 space-y-3">
-                         <p className="text-xs text-green-600 font-sans">
-                           Você presenteou este item. <br/>
-                           {isAnonymous && <span className="text-fineBlack/40">(Modo Anônimo)</span>}
-                         </p>
-                         <button
-                           onClick={() => onUnclaim(gift.id)}
-                           className="inline-flex items-center gap-2 px-6 py-2 border border-red-200 text-red-500 font-sans text-xs tracking-wider hover:bg-red-50 transition-colors rounded-sm uppercase"
-                         >
-                           <Trash2 size={14} />
-                           Desmarcar
-                         </button>
-                       </div>
-                    ) : isFullyClaimed ? (
-                      <div className="pt-4 border-t border-serenity/20">
-                        <div className="flex items-center justify-center gap-2 text-serenityDark font-medium font-sans text-sm">
-                          <Check size={16} />
-                          <span>Já presenteado</span>
+                    {/* Image */}
+                    <div className="aspect-[4/3] overflow-hidden relative">
+                      <img 
+                        src={gift.image} 
+                        alt={gift.name} 
+                        className={`w-full h-full object-cover transition-transform duration-700 ${isFullyClaimed && !isClaimedByMe ? 'grayscale opacity-60' : 'group-hover:scale-105'}`}
+                      />
+                      {isFullyClaimed && !isClaimedByMe && (
+                        <div className="absolute inset-0 bg-white/20 flex items-center justify-center">
+                           <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-white/90 text-fineBlack border-serenity/20">
+                             Já escolhido
+                           </span>
                         </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleOpenModal(gift.id)}
-                        className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-serenity text-white font-sans text-sm tracking-wider hover:bg-serenityDark transition-colors rounded-sm shadow-sm hover:shadow-md"
-                      >
-                        {currentUser ? <GiftIcon size={16} /> : <LogIn size={16} />}
-                        {currentUser ? 'VOU PRESENTEAR' : 'LOGIN PARA PRESENTEAR'}
-                      </button>
-                    )}
+                      )}
+                      {isClaimedByMe && (
+                        <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center">
+                           <span className="px-4 py-2 font-serif italic text-lg shadow-sm border backdrop-blur-sm bg-green-50 text-green-800 border-green-200">
+                             Escolhido por você
+                           </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-8 text-center space-y-4">
+                      <h3 className="font-serif text-2xl text-fineBlack">{gift.name}</h3>
+                      <p className="font-sans text-sm font-light text-fineBlack/60 leading-relaxed min-h-[3rem]">
+                        {gift.description}
+                      </p>
+
+                      {isClaimedByMe ? (
+                         <div className="pt-4 space-y-3">
+                           <p className="text-xs text-green-600 font-sans">
+                             Você presenteou este item. <br/>
+                             {isAnonymous && <span className="text-fineBlack/40">(Modo Anônimo)</span>}
+                           </p>
+                           <button
+                             onClick={() => onUnclaim(gift.id)}
+                             className="inline-flex items-center gap-2 px-6 py-2 border border-red-200 text-red-500 font-sans text-xs tracking-wider hover:bg-red-50 transition-colors rounded-sm uppercase"
+                           >
+                             <Trash2 size={14} />
+                             Desmarcar
+                           </button>
+                         </div>
+                      ) : isFullyClaimed ? (
+                        <div className="pt-4 border-t border-serenity/20">
+                          <div className="flex items-center justify-center gap-2 text-serenityDark font-medium font-sans text-sm">
+                            <Check size={16} />
+                            <span>Já presenteado</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenModal(gift.id)}
+                          className="mt-4 inline-flex items-center gap-2 px-8 py-3 bg-serenity text-white font-sans text-sm tracking-wider hover:bg-serenityDark transition-colors rounded-sm shadow-sm hover:shadow-md"
+                        >
+                          {currentUser ? <GiftIcon size={16} /> : <LogIn size={16} />}
+                          {currentUser ? 'VOU PRESENTEAR' : 'LOGIN PARA PRESENTEAR'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </ScrollReveal>
-            );
-          })}
+                );
+              })}
+            </ScrollReveal>
+          ))}
         </div>
       </div>
 
@@ -232,12 +235,10 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
             >
               <X size={24} />
             </button>
-            
             <h3 className="font-serif text-3xl text-fineBlack mb-2">Confirmar Presente</h3>
             <p className="font-sans text-sm text-fineBlack/60 mb-6">
               Que alegria! Confirme seu nome como aparecerá na lista ou escolha a opção anônima.
             </p>
-
             <form onSubmit={handleSubmitClaim} className="space-y-6">
               <div>
                 <label htmlFor="name" className="block text-xs uppercase tracking-wider text-fineBlack/50 mb-2">Seu Nome</label>
@@ -251,7 +252,6 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
                   required
                 />
               </div>
-
               <div className="flex items-center gap-3">
                 <div className="relative flex items-center">
                   <input
@@ -270,7 +270,6 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
                   Esconder meu nome apenas na lista pública
                 </label>
               </div>
-
               <button
                 type="submit"
                 className="w-full py-4 bg-serenity text-white font-sans text-sm tracking-widest hover:bg-serenityDark transition-colors uppercase rounded-sm shadow-md"

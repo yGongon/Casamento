@@ -23,9 +23,8 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({ children, className = "", d
       },
       { 
         threshold: 0.01, 
-        // rootMargin de 100px faz com que o item comece a animar 
-        // ANTES mesmo de entrar na área visível do navegador
-        rootMargin: "0px 0px 100px 0px" 
+        // Aumentado para 300px para carregar muito antes do scroll chegar
+        rootMargin: "0px 0px 300px 0px" 
       }
     );
 
