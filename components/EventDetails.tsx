@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MapPin, Church } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
@@ -31,7 +32,7 @@ const EventDetails: React.FC = () => {
             <div className="space-y-3">
               <h3 className="font-serif text-4xl text-fineBlack">A Bênção</h3>
               <p className="font-sans text-md font-medium text-serenityDark tracking-wider uppercase">
-                17:00 Horas
+                18:00 Horas
               </p>
             </div>
 

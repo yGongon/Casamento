@@ -1,8 +1,9 @@
+
 import { Gift } from './types';
 
-// Wedding Date: February 14, 2026 at 16:00
+// Wedding Date: February 21, 2026 at 18:00
 // Note: Month is 0-indexed in JavaScript Dates (0 = January, 1 = February)
-export const WEDDING_DATE = new Date(2026, 1, 14, 17, 0, 0);
+export const WEDDING_DATE = new Date(2026, 1, 21, 18, 0, 0);
 
 // Placeholder image for the couple. Replace with the actual photo URL.
 export const COUPLE_PHOTO = "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=2070&auto=format&fit=crop";

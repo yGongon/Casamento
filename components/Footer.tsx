@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ScrollReveal from './ScrollReveal';
 
@@ -9,7 +10,7 @@ const Footer: React.FC = () => {
           <h3 className="font-serif text-3xl md:text-4xl text-serenityDark">Wevelley & Gabriella</h3>
           <div className="w-8 h-px bg-serenity mx-auto" />
           <p className="font-sans font-light text-sm tracking-wide opacity-80">
-            14 de Fevereiro de 2026
+            21 de Fevereiro de 2026
           </p>
           <p className="font-sans font-light text-xs tracking-wide opacity-60 pt-4">
             Feito com amor, cuidado e essência.
