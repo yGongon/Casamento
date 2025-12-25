@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 
 interface ScrollRevealProps {
@@ -20,7 +21,9 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({ children, className = "", d
           observer.disconnect();
         }
       },
-      { threshold: 0.15, rootMargin: "0px 0px -50px 0px" }
+      // Threshold reduzido para 0.05 para disparar mais cedo
+      // rootMargin ajustado para não "segurar" o surgimento na parte inferior
+      { threshold: 0.05, rootMargin: "0px 0px -20px 0px" }
     );
 
     if (ref.current) {
@@ -33,8 +36,8 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({ children, className = "", d
   return (
     <div
       ref={ref}
-      className={`transition-all duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] transform ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+      className={`transition-all duration-[700ms] ease-[cubic-bezier(0.25,1,0.5,1)] transform ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
       } ${className}`}
     >
       {children}
