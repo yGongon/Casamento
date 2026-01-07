@@ -9,7 +9,7 @@ export const WEDDING_DATE = new Date(2026, 1, 21, 18, 0, 0);
 export const COUPLE_PHOTO = "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=2070&auto=format&fit=crop";
 
 // PIX Configuration
-export const PIX_KEY = "(75)992258902"; 
+export const PIX_KEY = "75 992257902"; 
 export const PIX_HOLDER_NAME = "Gabriella & Wevelley";
 export const PIX_QR_CODE_URL = "https://i.ibb.co/4np1C1gC/QR-code-wevelley.jpg"; 
 
