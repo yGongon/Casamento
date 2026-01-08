@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Gift, GiftClaim } from './types';
-import { INITIAL_GIFTS, INITIAL_GOALS, GOAL_IDS } from './constants';
+import { INITIAL_GIFTS, INITIAL_GOALS, GOAL_IDS, ADMIN_EMAILS } from './constants';
 import Hero from './components/Hero';
 import EventDetails from './components/EventDetails';
 import GiftList from './components/GiftList';
 import CashGift from './components/CashGift';
 import Footer from './components/Footer';
 import { db, auth, googleProvider } from './firebase';
-import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, deleteDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2, CheckCircle, XCircle, AlertCircle, Plane, Camera } from 'lucide-react';
 import emailjs from '@emailjs/browser';
@@ -73,77 +74,36 @@ const App: React.FC = () => {
       },
       (err) => {
         console.error("Firebase Error (Loading Gifts):", err);
-        // FALLBACK: Em vez de mostrar tela de erro, carrega os dados locais
-        // Isso previne que o site fique fora do ar se as regras do Firebase bloquearem a leitura
-        console.log("Usando lista local de presentes como fallback.");
         setGifts(INITIAL_GIFTS);
         setLoading(false);
       }
     );
 
-    // Seed logic (Updated to sync changes from constants.ts including maxQuantity and CASH GOALS)
+    // Seed logic (Smarter: only seeds if collection is empty to respect manual deletions)
     const seedDatabase = async () => {
       try {
-        const batch = writeBatch(db);
-        let updatesCount = 0;
-
-        // 1. Seed Gifts
-        // Note: This might fail if permissions are restricted, catch block handles it
         const giftsSnapshot = await getDocs(giftsCollectionRef);
-        const existingDocs = new Map<string, Gift>(
-          giftsSnapshot.docs.map(doc => [doc.id, doc.data() as Gift] as [string, Gift])
-        );
         
-        INITIAL_GIFTS.forEach((gift) => {
-          const docRef = doc(db, 'gifts', gift.id);
-          const existingData = existingDocs.get(gift.id);
-
-          if (!existingData) {
-            // Create new if doesn't exist
+        // Se a coleção de presentes estiver vazia, faz o seed inicial
+        if (giftsSnapshot.empty) {
+          console.log("Banco de dados vazio. Iniciando carga inicial de presentes...");
+          const batch = writeBatch(db);
+          INITIAL_GIFTS.forEach((gift) => {
+            const docRef = doc(db, 'gifts', gift.id);
             batch.set(docRef, { ...gift, claims: [] });
-            updatesCount++;
-          } else {
-            // Update static fields if they changed in constants.ts
-            let needsUpdate = false;
-            const updates: any = {};
-            const currentGift = existingData as Gift;
+          });
+          await batch.commit();
+        }
 
-            if (currentGift.image !== gift.image) { updates.image = gift.image; needsUpdate = true; }
-            if (currentGift.name !== gift.name) { updates.name = gift.name; needsUpdate = true; }
-            if (currentGift.description !== gift.description) { updates.description = gift.description; needsUpdate = true; }
-            if (currentGift.category !== gift.category) { updates.category = gift.category; needsUpdate = true; }
-            
-            // Sync maxQuantity
-            const newMax = gift.maxQuantity || 1;
-            const oldMax = currentGift.maxQuantity || 1;
-            if (newMax !== oldMax) {
-              updates.maxQuantity = newMax;
-              needsUpdate = true;
-            }
-
-            if (needsUpdate) {
-              batch.update(docRef, updates);
-              updatesCount++;
-            }
-          }
-        });
-
-        // 2. Seed Cash Goals
+        // Seed Metas Financeiras (se não existirem)
         const goalsSnapshot = await getDocs(goalsCollectionRef);
-        const existingGoals = new Map(goalsSnapshot.docs.map(doc => [doc.id, doc.data()]));
-        
-        INITIAL_GOALS.forEach((goal) => {
-          if (!existingGoals.has(goal.id)) {
+        if (goalsSnapshot.empty) {
+          const batch = writeBatch(db);
+          INITIAL_GOALS.forEach((goal) => {
             const goalRef = doc(db, 'cash_goals', goal.id);
             batch.set(goalRef, goal);
-            updatesCount++;
-          }
-          // Note: We do NOT update goals if they exist, to avoid overwriting currentAmount
-        });
-
-        if (updatesCount > 0) {
+          });
           await batch.commit();
-          console.log(`Updated ${updatesCount} items in database.`);
         }
       } catch (err) {
         console.warn("Seed Warning (Isso é normal se as regras de escrita estiverem restritas):", err);
@@ -193,13 +153,11 @@ const App: React.FC = () => {
       const currentClaims = giftData.claims || [];
       const maxQuantity = giftData.maxQuantity || 1;
 
-      // Check capacity
       if (currentClaims.length >= maxQuantity) {
          setToast({ message: "Este presente já foi escolhido por completo.", type: 'error' });
          return;
       }
 
-      // Check if user already claimed THIS item (prevent double booking same item ID)
       const hasAlreadyClaimed = currentClaims.some(c => c.userId === user.uid);
       if (hasAlreadyClaimed) {
         setToast({ message: "Você já escolheu este presente.", type: 'error' });
@@ -213,10 +171,8 @@ const App: React.FC = () => {
         timestamp: Date.now()
       };
 
-      // Add to claims array
       await updateDoc(giftRef, {
         claims: arrayUnion(newClaim),
-        // Legacy support
         claimedBy: name, 
         claimedByUserId: user.uid,
         isAnonymous: isAnonymous
@@ -224,13 +180,11 @@ const App: React.FC = () => {
 
       setToast({ message: "Presente marcado com sucesso! Obrigado!", type: 'success' });
 
-      // --- EMAIL NOTIFICATION CONFIGURATION ---
-      
+      // --- EMAIL NOTIFICATION ---
       const EMAILJS_SERVICE_ID = "casamentowevelley";   
       const EMAILJS_TEMPLATE_ID = "template_l9getos"; 
       const EMAILJS_PUBLIC_KEY = "VA3a0JkCjqXQUIec1";   
       
-      // Validação simples
       if (EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
           const emailParams = {
             to_email: 'wevelleytwich@gmail.com',
@@ -240,25 +194,11 @@ const App: React.FC = () => {
             is_anonymous: isAnonymous ? '(Marcado como anônimo no site)' : '',
             timestamp: new Date().toLocaleString('pt-BR')
           };
-
-          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams, EMAILJS_PUBLIC_KEY)
-            .then(() => console.log('Notificação de email enviada'))
-            .catch((err) => {
-              console.warn('Falha ao enviar notificação de email:', err);
-              if (err.text?.includes("insufficient authentication scopes") || err.status === 412) {
-                console.error("ERRO CRÍTICO EMAILJS (412): Reconecte o Gmail no painel do EmailJS e MARQUE a caixa 'Enviar email em meu nome'.");
-              }
-            });
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams, EMAILJS_PUBLIC_KEY).catch(console.error);
       }
-      // --------------------------------
-
     } catch (error: any) {
       console.error("Error claiming gift:", error);
-      if (error.code === 'permission-denied') {
-        setToast({ message: "Erro de permissão: Você precisa estar logado e as regras do banco de dados devem permitir escrita.", type: 'error' });
-      } else {
-        setToast({ message: "Erro ao marcar presente. Tente novamente.", type: 'error' });
-      }
+      setToast({ message: "Erro ao marcar presente.", type: 'error' });
     }
   };
 
@@ -268,20 +208,14 @@ const App: React.FC = () => {
     try {
       const giftRef = doc(db, 'gifts', giftId);
       const giftSnap = await getDoc(giftRef);
-      
       if (!giftSnap.exists()) return;
 
       const giftData = giftSnap.data() as Gift;
       const currentClaims = giftData.claims || [];
-
-      // Filter out the current user's claim
       const updatedClaims = currentClaims.filter(c => c.userId !== user.uid);
       
-      const updates: any = {
-        claims: updatedClaims
-      };
+      const updates: any = { claims: updatedClaims };
 
-      // If no claims left, clear legacy fields
       if (updatedClaims.length === 0) {
         updates.claimedBy = null;
         updates.claimedByUserId = null;
@@ -301,6 +235,22 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteGift = async (giftId: string) => {
+    if (!user || !ADMIN_EMAILS.includes(user.email || '')) return;
+
+    if (!window.confirm("Tem certeza que deseja remover este presente da lista para sempre?")) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'gifts', giftId));
+      setToast({ message: "Presente removido da lista permanentemente.", type: 'success' });
+    } catch (error) {
+      console.error("Error deleting gift:", error);
+      setToast({ message: "Erro ao remover presente. Verifique as permissões.", type: 'error' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-pureWhite text-serenityDark">
@@ -309,8 +259,6 @@ const App: React.FC = () => {
     );
   }
 
-  // Com o fallback implementado acima, essa tela de erro dificilmente aparecerá,
-  // mas mantemos como segurança para erros críticos não relacionados ao Firestore.
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-pureWhite text-fineBlack px-4 text-center">
@@ -332,7 +280,6 @@ const App: React.FC = () => {
       <Hero user={user} onLogin={handleLogin} onLogout={handleLogout} />
       <EventDetails />
       
-      {/* 1. Lua de Mel */}
       <CashGift 
         goalId={GOAL_IDS.HONEYMOON}
         currentUser={user}
@@ -344,7 +291,6 @@ const App: React.FC = () => {
         buttonText="Contribuir para a Viagem"
       />
 
-      {/* 2. Ajuda com o Fotógrafo (Reverse Layout) */}
       <CashGift 
         goalId={GOAL_IDS.PHOTOS}
         currentUser={user}
@@ -364,6 +310,7 @@ const App: React.FC = () => {
         currentUser={user} 
         onClaim={handleClaimGift} 
         onUnclaim={handleUnclaimGift}
+        onDelete={handleDeleteGift}
         onLogin={handleLogin}
       />
       
