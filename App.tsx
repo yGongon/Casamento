@@ -8,9 +8,9 @@ import GiftList from './components/GiftList';
 import CashGift from './components/CashGift';
 import Footer from './components/Footer';
 import { db, auth, googleProvider } from './firebase';
-import { collection, onSnapshot, doc, updateDoc, arrayUnion, getDoc, deleteDoc, setDoc, addDoc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, arrayUnion, getDoc, deleteDoc, setDoc, addDoc, query, orderBy, limit, writeBatch } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { Loader2, CheckCircle, XCircle, Plane, Camera, History, ShieldAlert } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Plane, Camera, ShieldAlert, RefreshCw, AlertTriangle } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
@@ -20,7 +20,7 @@ const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () 
   }, [onClose]);
 
   return (
-    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-sm shadow-2xl animate-slide-up ${
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-4 rounded-sm shadow-2xl animate-slide-up ${
       type === 'success' ? 'bg-serenityDark text-white' : 'bg-red-500 text-white'
     }`}>
       {type === 'success' ? <CheckCircle size={20} /> : <XCircle size={20} />}
@@ -45,7 +45,6 @@ const App: React.FC = () => {
     return () => unsubscribeAuth();
   }, []);
 
-  // Listener de Presentes
   useEffect(() => {
     const giftsCollectionRef = collection(db, 'gifts');
     const unsubscribe = onSnapshot(giftsCollectionRef, (snapshot) => {
@@ -56,11 +55,10 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Listener de Logs (Só para Admin)
   useEffect(() => {
     if (!isAdmin) return;
     const logsRef = collection(db, 'activity_logs');
-    const q = query(logsRef, orderBy('timestamp', 'desc'), limit(20));
+    const q = query(logsRef, orderBy('timestamp', 'desc'), limit(30));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -70,9 +68,32 @@ const App: React.FC = () => {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-      setToast({ message: "Acesso liberado!", type: 'success' });
+      setToast({ message: "Acesso de administrador liberado!", type: 'success' });
     } catch (error) {
-      setToast({ message: "Erro ao entrar.", type: 'error' });
+      setToast({ message: "Erro ao autenticar.", type: 'error' });
+    }
+  };
+
+  const safeRestoreGifts = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm("Isso irá apenas ADICIONAR os itens da lista original que por acaso sumiram. Seus itens marcados ou novos NÃO serão apagados. Deseja continuar?")) return;
+    
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      for (const gift of INITIAL_GIFTS) {
+        const giftRef = doc(db, 'gifts', gift.id);
+        const snap = await getDoc(giftRef);
+        if (!snap.exists()) {
+          batch.set(giftRef, { ...gift, claims: [] });
+        }
+      }
+      await batch.commit();
+      setToast({ message: "Estrutura da lista restaurada!", type: 'success' });
+    } catch (e) {
+      setToast({ message: "Erro na restauração.", type: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -93,26 +114,23 @@ const App: React.FC = () => {
 
       await updateDoc(giftRef, { claims: arrayUnion(newClaim) });
       
-      // LOG DE SEGURANÇA (O Backup que salva vocês)
       await addDoc(collection(db, 'activity_logs'), {
-        action: 'PRESENTE_MARCADO',
+        action: manualByAdmin ? 'RECUPERAÇÃO_MANUAL' : 'PRESENTE_MARCADO',
         details: `${name} presenteou ${giftData.name}`,
         guest_name: name,
         gift_name: giftData.name,
         timestamp: Date.now()
       });
 
-      setToast({ message: manualByAdmin ? "Restauração concluída!" : "Obrigado! ❤️", type: 'success' });
+      setToast({ message: manualByAdmin ? "Presente restaurado!" : "Obrigado! ❤️", type: 'success' });
 
-      // Notificação de Email Reforçada
       const EMAILJS_PUBLIC_KEY = "VA3a0JkCjqXQUIec1";   
       if (EMAILJS_PUBLIC_KEY && !manualByAdmin) {
           emailjs.send("casamentowevelley", "template_l9getos", {
             guest_name: name,
             gift_name: giftData.name,
-            message: isAnonymous ? "Presente anônimo" : `Presenteado por ${name}`,
-            date: new Date().toLocaleString('pt-BR')
-          }, EMAILJS_PUBLIC_KEY).catch(err => console.error("Erro EmailJS:", err));
+            message: `Ação realizada em ${new Date().toLocaleString('pt-BR')}`,
+          }, EMAILJS_PUBLIC_KEY).catch(console.error);
       }
     } catch (error) {
       setToast({ message: "Erro ao salvar.", type: 'error' });
@@ -129,12 +147,8 @@ const App: React.FC = () => {
       let updatedClaims = [...(giftData.claims || [])];
       
       const removedClaim = claimIndex !== undefined ? updatedClaims[claimIndex] : updatedClaims.find(c => c.userId === user.uid);
-
-      if (claimIndex !== undefined) {
-        updatedClaims.splice(claimIndex, 1);
-      } else {
-        updatedClaims = updatedClaims.filter(c => c.userId !== user.uid);
-      }
+      if (claimIndex !== undefined) updatedClaims.splice(claimIndex, 1);
+      else updatedClaims = updatedClaims.filter(c => c.userId !== user.uid);
 
       await updateDoc(giftRef, { claims: updatedClaims });
       
@@ -144,16 +158,10 @@ const App: React.FC = () => {
         timestamp: Date.now()
       });
 
-      setToast({ message: "Removido.", type: 'success' });
+      setToast({ message: "Marcação removida.", type: 'success' });
     } catch (error) {
       setToast({ message: "Erro ao desmarcar.", type: 'error' });
     }
-  };
-
-  const handleAddGift = async (newGift: Omit<Gift, 'id' | 'claims'>) => {
-    const id = `item-${Date.now()}`;
-    await setDoc(doc(db, 'gifts', id), { ...newGift, id, claims: [] });
-    setToast({ message: "Item adicionado!", type: 'success' });
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-serenity" /></div>;
@@ -161,30 +169,21 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-pureWhite">
       <Hero user={user} onLogin={handleLogin} onLogout={() => signOut(auth)} />
+      
+      {isAdmin && (
+        <div className="bg-red-50 border-y border-red-100 py-3 px-4 flex justify-center items-center gap-6 sticky top-0 z-[60] shadow-sm">
+          <div className="flex items-center gap-2 text-red-700 font-bold text-[10px] uppercase tracking-widest">
+            <ShieldAlert size={14} /> Modo Administrador
+          </div>
+          <button onClick={safeRestoreGifts} className="flex items-center gap-2 px-4 py-1.5 bg-red-600 text-white rounded-full text-[10px] uppercase tracking-tighter hover:bg-red-700 transition-colors">
+            <RefreshCw size={12} /> Restaurar Itens Faltantes
+          </button>
+        </div>
+      )}
+
       <EventDetails />
-      
-      <CashGift 
-        goalId={GOAL_IDS.HONEYMOON} 
-        currentUser={user} 
-        title="Operação Lua de Mel" 
-        subtitle="Nossos Sonhos" 
-        description="Ficaríamos imensamente felizes com sua contribuição para nossa viagem." 
-        image="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0f/34/dc/b8/photo0jpg.jpg?w=1000" 
-        icon={Plane} 
-        buttonText="Contribuir" 
-      />
-      
-      <CashGift 
-        goalId={GOAL_IDS.PHOTOS} 
-        currentUser={user} 
-        title="Eternizando Momentos" 
-        subtitle="Memórias Únicas" 
-        description="Ajude-nos a guardar cada sorriso e emoção deste dia único." 
-        image="https://images.pexels.com/photos/34933461/pexels-photo-34933461.jpeg" 
-        icon={Camera} 
-        buttonText="Contribuir" 
-        reverse={true} 
-      />
+      <CashGift goalId={GOAL_IDS.HONEYMOON} currentUser={user} title="Operação Lua de Mel" subtitle="Nossos Sonhos" description="Ficaríamos imensamente felizes com sua contribuição para nossa viagem." image="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0f/34/dc/b8/photo0jpg.jpg?w=1000" icon={Plane} buttonText="Contribuir" />
+      <CashGift goalId={GOAL_IDS.PHOTOS} currentUser={user} title="Eternizando Momentos" subtitle="Memórias Únicas" description="Ajude-nos a guardar cada sorriso e emoção deste dia único." image="https://images.pexels.com/photos/34933461/pexels-photo-34933461.jpeg" icon={Camera} buttonText="Contribuir" reverse={true} />
 
       <GiftList 
         gifts={gifts} 
@@ -192,30 +191,41 @@ const App: React.FC = () => {
         onClaim={handleClaimGift} 
         onUnclaim={handleUnclaimGift} 
         onDelete={(id) => deleteDoc(doc(db, 'gifts', id))} 
-        onAdd={handleAddGift} 
+        onAdd={(g) => setDoc(doc(db, 'gifts', `item-${Date.now()}`), { ...g, id: `item-${Date.now()}`, claims: [] })} 
         onLogin={handleLogin} 
       />
       
-      {/* PAINEL DE MONITORAMENTO ADMIN */}
-      {isAdmin && activityLogs.length > 0 && (
-        <section className="bg-gray-50 py-12 px-4 border-t border-gray-200">
+      {isAdmin && (
+        <section className="bg-slate-900 text-white py-16 px-4">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center gap-2 mb-6 text-red-600">
-              <ShieldAlert size={20} />
-              <h2 className="font-sans text-xs font-bold uppercase tracking-widest">Painel de Segurança & Logs (Admin)</h2>
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="text-yellow-400" />
+                <h2 className="font-serif text-2xl">Histórico de Atividade (Recuperação)</h2>
+              </div>
+              <span className="text-[10px] uppercase tracking-widest opacity-50">Últimas 30 ações</span>
             </div>
-            <div className="space-y-2">
-              {activityLogs.map((log) => (
-                <div key={log.id} className="bg-white p-3 rounded-sm border border-gray-100 flex justify-between items-center shadow-sm">
-                  <div>
-                    <p className="text-[10px] font-bold text-serenityDark uppercase">{log.action}</p>
-                    <p className="text-xs text-fineBlack">{log.details || log.message}</p>
-                  </div>
-                  <span className="text-[9px] text-gray-400">
-                    {new Date(log.timestamp).toLocaleString('pt-BR')}
-                  </span>
+            
+            <div className="bg-white/5 rounded-sm border border-white/10 overflow-hidden">
+              {activityLogs.length === 0 ? (
+                <div className="p-12 text-center opacity-40 italic text-sm">Nenhuma atividade registrada ainda.</div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {activityLogs.map((log) => (
+                    <div key={log.id} className="p-4 flex justify-between items-center hover:bg-white/5 transition-colors">
+                      <div>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mr-3 ${log.action.includes('RECUPERAÇÃO') ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {log.action}
+                        </span>
+                        <p className="text-sm mt-1">{log.details}</p>
+                      </div>
+                      <span className="text-[10px] opacity-40 font-mono">
+                        {new Date(log.timestamp).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </section>
