@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Gift } from '../types';
-import { Check, Gift as GiftIcon, X, Lock, Trash2, LogIn, Info, Settings, Plus, Camera, Type } from 'lucide-react';
+import { Check, X, Settings, Plus, Trash2, UserPlus, History } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
 import { User } from 'firebase/auth';
 import { ADMIN_EMAILS } from '../constants';
@@ -9,8 +9,8 @@ import { ADMIN_EMAILS } from '../constants';
 interface GiftListProps {
   gifts: Gift[];
   currentUser: User | null;
-  onClaim: (giftId: string, name: string, isAnonymous: boolean) => void;
-  onUnclaim: (giftId: string) => void;
+  onClaim: (giftId: string, name: string, isAnonymous: boolean, manualByAdmin?: boolean) => void;
+  onUnclaim: (giftId: string, claimIndex?: number) => void;
   onDelete: (giftId: string) => void;
   onAdd: (gift: Omit<Gift, 'id' | 'claims'>) => void;
   onLogin: () => void;
@@ -18,127 +18,87 @@ interface GiftListProps {
 
 const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUnclaim, onDelete, onAdd, onLogin }) => {
   const [selectedGiftId, setSelectedGiftId] = useState<string | null>(null);
+  const [manualClaimGiftId, setManualClaimGiftId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  // Add Gift Form State
   const [newGift, setNewGift] = useState({ name: '', description: '', image: '', category: 'Cozinha', maxQuantity: 1 });
 
   const isAdmin = currentUser && currentUser.email && ADMIN_EMAILS.includes(currentUser.email);
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(gifts.map(g => g.category)));
-    return ['Todos', ...cats.sort()];
-  }, [gifts]);
-
-  const filteredGifts = useMemo(() => {
-    if (selectedCategory === 'Todos') return gifts;
-    return gifts.filter(g => g.category === selectedCategory);
-  }, [gifts, selectedCategory]);
-
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onAdd(newGift);
-    setIsAddModalOpen(false);
-    setNewGift({ name: '', description: '', image: '', category: 'Cozinha', maxQuantity: 1 });
-  };
+  const categories = useMemo(() => ['Todos', ...Array.from(new Set(gifts.map(g => g.category))).sort()], [gifts]);
+  const filteredGifts = useMemo(() => selectedCategory === 'Todos' ? gifts : gifts.filter(g => g.category === selectedCategory), [gifts, selectedCategory]);
 
   return (
-    <section className="relative bg-pureWhite py-20 px-4 md:px-8 overflow-hidden" id="lista-de-presentes">
-      <div className="relative z-10 max-w-6xl mx-auto">
+    <section className="py-20 px-4 bg-pureWhite" id="lista-de-presentes">
+      <div className="max-w-6xl mx-auto">
         <ScrollReveal>
-          <div className="text-center mb-12 space-y-6">
-            <h2 className="font-serif text-4xl md:text-5xl text-fineBlack">Com Carinho</h2>
-            <div className="w-16 h-px bg-serenity mx-auto" />
-            <p className="font-sans font-light text-fineBlack/70 leading-relaxed text-sm max-w-2xl mx-auto">
-              Sinta-se à vontade para nos presentear. Sua presença é o mais importante para nós.
-            </p>
-            
+          <div className="text-center mb-12">
+            <h2 className="font-serif text-4xl text-fineBlack mb-4">Lista de Presentes</h2>
             {isAdmin && (
-              <div className="flex justify-center gap-4 mt-8">
-                <button 
-                  onClick={() => setIsAdminMode(!isAdminMode)}
-                  className={`flex items-center gap-2 px-6 py-2 rounded-full border text-xs font-sans tracking-widest transition-all ${isAdminMode ? 'bg-serenityDark text-white border-serenityDark' : 'bg-white text-serenityDark border-serenity'}`}
-                >
-                  <Settings size={14} className={isAdminMode ? 'animate-spin' : ''} />
-                  {isAdminMode ? 'SAIR DO MODO ADMIN' : 'GERENCIAR LISTA'}
+              <div className="flex justify-center gap-4 mt-4">
+                <button onClick={() => setIsAdminMode(!isAdminMode)} className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[10px] tracking-widest uppercase transition-all ${isAdminMode ? 'bg-serenityDark text-white' : 'bg-white'}`}>
+                  <Settings size={14} /> {isAdminMode ? 'Modo Admin: Ativo' : 'Ativar Modo Admin'}
                 </button>
                 {isAdminMode && (
-                  <button 
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="flex items-center gap-2 px-6 py-2 bg-green-500 text-white rounded-full text-xs font-sans tracking-widest shadow-md hover:bg-green-600 transition-all"
-                  >
-                    <Plus size={14} /> ADICIONAR ITEM
-                  </button>
+                  <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-full text-[10px] tracking-widest uppercase"><Plus size={14} /> Novo Item</button>
                 )}
               </div>
             )}
           </div>
         </ScrollReveal>
 
-        <div className="flex flex-wrap justify-center gap-3 mb-12">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-5 py-2 text-xs font-sans tracking-widest rounded-full border transition-all ${selectedCategory === cat ? 'bg-serenity text-white border-serenity shadow-sm' : 'bg-white text-fineBlack/50 border-transparent hover:text-fineBlack'}`}
-            >
-              {cat}
-            </button>
+        <div className="flex flex-wrap justify-center gap-2 mb-12">
+          {categories.map(cat => (
+            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 text-[10px] tracking-widest rounded-full border uppercase transition-all ${selectedCategory === cat ? 'bg-serenity text-white border-serenity' : 'bg-white text-gray-400'}`}>{cat}</button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredGifts.map((gift) => {
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {filteredGifts.map(gift => {
             const claims = gift.claims || [];
-            const isFullyClaimed = claims.length >= (gift.maxQuantity || 1);
-            const isClaimedByMe = currentUser ? claims.some(c => c.userId === currentUser.uid) : false;
+            const isFull = claims.length >= (gift.maxQuantity || 1);
+            const myClaim = currentUser ? claims.find(c => c.userId === currentUser.uid) : null;
 
             return (
-              <div key={gift.id} className="group relative bg-white border border-serenityLight rounded-sm overflow-hidden transition-all duration-300 hover:shadow-lg">
-                
+              <div key={gift.id} className="bg-white border border-gray-100 rounded-sm overflow-hidden group hover:shadow-xl transition-all relative">
                 {isAdminMode && (
-                  <button 
-                    onClick={() => onDelete(gift.id)}
-                    className="absolute top-3 right-3 z-30 p-2 bg-red-500 text-white rounded-full shadow-xl hover:scale-110 transition-transform"
-                    title="Excluir Permanentemente"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="absolute top-2 right-2 z-20 flex flex-col gap-2">
+                    <button onClick={() => onDelete(gift.id)} className="p-2 bg-red-500 text-white rounded-full shadow-lg"><Trash2 size={14} /></button>
+                    <button onClick={() => setManualClaimGiftId(gift.id)} className="p-2 bg-blue-500 text-white rounded-full shadow-lg" title="Restaurar marcação manual"><UserPlus size={14} /></button>
+                  </div>
                 )}
-
-                <div className="aspect-[4/3] overflow-hidden relative">
-                  <img src={gift.image} alt={gift.name} className={`w-full h-full object-cover transition-transform duration-700 ${isFullyClaimed && !isClaimedByMe ? 'grayscale opacity-40' : 'group-hover:scale-105'}`} />
-                  {isFullyClaimed && !isClaimedByMe && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/20 backdrop-blur-[2px]">
-                      <span className="px-4 py-2 bg-white/90 font-serif italic text-lg shadow-sm">Já presenteado</span>
-                    </div>
-                  )}
-                  {isClaimedByMe && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-green-50/20 backdrop-blur-[2px]">
-                      <span className="px-4 py-2 bg-green-500 text-white font-sans text-xs tracking-widest uppercase shadow-md">Escolhido por você</span>
-                    </div>
-                  )}
+                
+                <div className="aspect-square overflow-hidden bg-gray-50">
+                  <img src={gift.image} alt={gift.name} className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 ${isFull && !myClaim ? 'grayscale opacity-50' : ''}`} />
                 </div>
 
-                <div className="p-8 text-center space-y-4">
-                  <span className="text-[10px] uppercase tracking-widest text-serenityDark font-medium">{gift.category}</span>
-                  <h3 className="font-serif text-2xl text-fineBlack">{gift.name}</h3>
-                  <p className="font-sans text-xs text-fineBlack/50 leading-relaxed min-h-[2rem]">{gift.description}</p>
+                <div className="p-6 text-center">
+                  <span className="text-[9px] uppercase tracking-widest text-serenityDark font-bold">{gift.category}</span>
+                  <h3 className="font-serif text-xl my-2">{gift.name}</h3>
                   
-                  {isClaimedByMe ? (
-                    <button onClick={() => onUnclaim(gift.id)} className="text-red-400 text-[10px] tracking-widest uppercase hover:underline mt-4">Desmarcar Presente</button>
-                  ) : !isFullyClaimed && (
-                    <button 
-                      onClick={() => currentUser ? setSelectedGiftId(gift.id) : onLogin()} 
-                      className="mt-4 w-full py-3 bg-serenity text-white text-xs tracking-widest hover:bg-serenityDark transition-all uppercase rounded-sm"
-                    >
-                      Presentear
-                    </button>
+                  {claims.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-[9px] text-gray-400 uppercase tracking-tighter mb-1">Presenteado por:</p>
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {claims.map((c, idx) => (
+                          <span key={idx} className="bg-serenityLight text-serenityDark text-[10px] px-2 py-1 rounded-sm flex items-center gap-1">
+                            {c.isAnonymous ? 'Anônimo' : c.name}
+                            {isAdminMode && <X size={10} className="cursor-pointer hover:text-red-500" onClick={() => onUnclaim(gift.id, idx)} />}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
+
+                  {myClaim ? (
+                    <button onClick={() => onUnclaim(gift.id)} className="text-red-400 text-[10px] uppercase tracking-widest border-b border-red-200">Cancelar meu presente</button>
+                  ) : !isFull && (
+                    <button onClick={() => currentUser ? setSelectedGiftId(gift.id) : onLogin()} className="w-full py-3 bg-serenity text-white text-[10px] tracking-widest uppercase hover:bg-serenityDark">Escolher Presente</button>
+                  )}
+                  {isFull && !myClaim && <span className="text-[10px] font-serif italic text-gray-400">Este item já foi presenteado</span>}
                 </div>
               </div>
             );
@@ -146,51 +106,49 @@ const GiftList: React.FC<GiftListProps> = ({ gifts, currentUser, onClaim, onUncl
         </div>
       </div>
 
-      {/* Modal Add Gift */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-serenityDark/20 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md p-8 rounded-sm shadow-2xl relative animate-slide-up border border-white/50">
-            <button onClick={() => setIsAddModalOpen(false)} className="absolute top-4 right-4 text-fineBlack/40 hover:text-fineBlack"><X size={24} /></button>
-            <h3 className="font-serif text-3xl text-fineBlack mb-6">Novo Presente</h3>
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-fineBlack/40 mb-1 block">Nome do Item</label>
-                <input type="text" required value={newGift.name} onChange={e => setNewGift({...newGift, name: e.target.value})} className="w-full border-b py-2 outline-none focus:border-serenity transition-colors" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-fineBlack/40 mb-1 block">URL da Imagem</label>
-                <input type="url" required value={newGift.image} onChange={e => setNewGift({...newGift, image: e.target.value})} className="w-full border-b py-2 outline-none focus:border-serenity transition-colors" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-fineBlack/40 mb-1 block">Categoria</label>
-                <select value={newGift.category} onChange={e => setNewGift({...newGift, category: e.target.value})} className="w-full border-b py-2 outline-none focus:border-serenity transition-colors bg-transparent">
-                  <option>Cozinha</option>
-                  <option>Cama & Banho</option>
-                  <option>Casa & Décor</option>
-                  <option>Eletros</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full py-4 bg-serenity text-white text-xs tracking-widest hover:bg-serenityDark transition-all uppercase rounded-sm shadow-lg mt-4">Adicionar à Lista</button>
-            </form>
+      {/* Modal Manual Claim (RECUPERAÇÃO) */}
+      {manualClaimGiftId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm p-8 rounded-sm shadow-2xl relative">
+            <button onClick={() => setManualClaimGiftId(null)} className="absolute top-4 right-4 text-gray-400"><X size={20} /></button>
+            <h3 className="font-serif text-2xl mb-4">Restaurar Marcação</h3>
+            <p className="text-[10px] text-gray-400 uppercase mb-4">Use os dados do e-mail para preencher aqui.</p>
+            <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} className="w-full border-b py-2 mb-4 outline-none" placeholder="Nome do Convidado" />
+            <button onClick={() => { onClaim(manualClaimGiftId, guestName, false, true); setManualClaimGiftId(null); setGuestName(''); }} className="w-full py-3 bg-blue-600 text-white text-[10px] uppercase tracking-widest">Salvar Manualmente</button>
           </div>
         </div>
       )}
 
-      {/* Modal Claim Gift */}
+      {/* Modal Public Claim */}
       {selectedGiftId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-serenityDark/20 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white w-full max-w-md p-8 rounded-sm shadow-2xl relative animate-slide-up">
-            <button onClick={() => setSelectedGiftId(null)} className="absolute top-4 right-4 text-fineBlack/40"><X size={24} /></button>
-            <h3 className="font-serif text-3xl text-fineBlack mb-2">Confirmar Presente</h3>
-            <p className="font-sans text-xs text-fineBlack/50 mb-6 uppercase tracking-widest">Muito obrigado pelo carinho!</p>
-            <form onSubmit={(e) => { e.preventDefault(); onClaim(selectedGiftId, guestName || 'Convidado', isAnonymous); setSelectedGiftId(null); }} className="space-y-6">
-              <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} className="w-full border-b py-2 outline-none focus:border-serenity transition-colors" placeholder="Seu nome" required />
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="anon" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} className="accent-serenity" />
-                <label htmlFor="anon" className="text-xs font-sans text-fineBlack/60 cursor-pointer">Marcar como anônimo na lista pública</label>
-              </div>
-              <button type="submit" className="w-full py-4 bg-serenity text-white text-xs tracking-widest uppercase rounded-sm shadow-md">Confirmar</button>
-            </form>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm p-8 rounded-sm shadow-2xl relative">
+            <button onClick={() => setSelectedGiftId(null)} className="absolute top-4 right-4 text-gray-400"><X size={20} /></button>
+            <h3 className="font-serif text-2xl mb-4">Presentear</h3>
+            <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} className="w-full border-b py-2 mb-4 outline-none" placeholder="Seu Nome" />
+            <div className="flex items-center gap-2 mb-6">
+              <input type="checkbox" id="anon" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} />
+              <label htmlFor="anon" className="text-xs text-gray-500">Ocultar meu nome na lista pública</label>
+            </div>
+            <button onClick={() => { onClaim(selectedGiftId, guestName, isAnonymous); setSelectedGiftId(null); setGuestName(''); }} className="w-full py-3 bg-serenity text-white text-[10px] uppercase tracking-widest">Confirmar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Add Gift */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white w-full max-w-md p-8 rounded-sm relative">
+            <button onClick={() => setIsAddModalOpen(false)} className="absolute top-4 right-4"><X size={20} /></button>
+            <h3 className="font-serif text-2xl mb-6">Novo Item</h3>
+            <div className="space-y-4">
+              <input type="text" placeholder="Nome" className="w-full border-b py-2" onChange={e => setNewGift({...newGift, name: e.target.value})} />
+              <input type="text" placeholder="URL Imagem" className="w-full border-b py-2" onChange={e => setNewGift({...newGift, image: e.target.value})} />
+              <select className="w-full border-b py-2" onChange={e => setNewGift({...newGift, category: e.target.value})}>
+                <option>Cozinha</option><option>Cama & Banho</option><option>Casa & Décor</option>
+              </select>
+              <button onClick={() => { onAdd(newGift); setIsAddModalOpen(false); }} className="w-full py-3 bg-serenity text-white uppercase text-[10px] tracking-widest mt-4">Adicionar</button>
+            </div>
           </div>
         </div>
       )}
