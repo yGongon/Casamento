@@ -8,7 +8,7 @@ import GiftList from './components/GiftList';
 import CashGift from './components/CashGift';
 import Footer from './components/Footer';
 import { db, auth, googleProvider } from './firebase';
-import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, getDocs, writeBatch, arrayUnion, getDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2, CheckCircle, XCircle, AlertCircle, Plane, Camera } from 'lucide-react';
 import emailjs from '@emailjs/browser';
@@ -48,7 +48,7 @@ const App: React.FC = () => {
   // Database Listener
   useEffect(() => {
     const giftsCollectionRef = collection(db, 'gifts');
-    const goalsCollectionRef = collection(db, 'cash_goals');
+    const settingsDocRef = doc(db, 'settings', 'setup');
 
     const unsubscribe = onSnapshot(
       giftsCollectionRef, 
@@ -58,14 +58,17 @@ const App: React.FC = () => {
           id: doc.id
         })) as Gift[];
         
-        // Custom sort (by numeric part of ID)
+        // Custom sort by original ID or timestamp
         const sortedGifts = giftsData.sort((a, b) => {
            const getNum = (id: string) => {
              const parts = id.split('-');
              if (parts.length > 1) return parseInt(parts[1]) || 0;
              return 0;
            };
-           return getNum(a.id) - getNum(b.id);
+           const nA = getNum(a.id);
+           const nB = getNum(b.id);
+           if (nA !== nB) return nA - nB;
+           return (a.id > b.id) ? 1 : -1;
         });
         
         setGifts(sortedGifts);
@@ -74,53 +77,41 @@ const App: React.FC = () => {
       },
       (err) => {
         console.error("Firebase Error (Loading Gifts):", err);
-        setGifts(INITIAL_GIFTS);
+        setError("Erro de conexão com a lista de presentes.");
         setLoading(false);
       }
     );
 
-    // Seed logic (Smarter: only seeds if collection is empty to respect manual deletions)
     const seedDatabase = async () => {
       try {
-        const giftsSnapshot = await getDocs(giftsCollectionRef);
-        
-        // Se a coleção de presentes estiver vazia, faz o seed inicial
-        if (giftsSnapshot.empty) {
-          console.log("Banco de dados vazio. Iniciando carga inicial de presentes...");
-          const batch = writeBatch(db);
-          INITIAL_GIFTS.forEach((gift) => {
-            const docRef = doc(db, 'gifts', gift.id);
-            batch.set(docRef, { ...gift, claims: [] });
-          });
-          await batch.commit();
-        }
+        const setupSnap = await getDoc(settingsDocRef);
+        if (setupSnap.exists() && setupSnap.data().completed) return;
 
-        // Seed Metas Financeiras (se não existirem)
-        const goalsSnapshot = await getDocs(goalsCollectionRef);
-        if (goalsSnapshot.empty) {
-          const batch = writeBatch(db);
-          INITIAL_GOALS.forEach((goal) => {
-            const goalRef = doc(db, 'cash_goals', goal.id);
-            batch.set(goalRef, goal);
-          });
-          await batch.commit();
-        }
+        const batch = writeBatch(db);
+        INITIAL_GIFTS.forEach((gift) => {
+          const docRef = doc(db, 'gifts', gift.id);
+          batch.set(docRef, { ...gift, claims: [] });
+        });
+        INITIAL_GOALS.forEach((goal) => {
+          const goalRef = doc(db, 'cash_goals', goal.id);
+          batch.set(goalRef, goal);
+        });
+        batch.set(settingsDocRef, { completed: true, timestamp: Date.now() });
+        await batch.commit();
       } catch (err) {
-        console.warn("Seed Warning (Isso é normal se as regras de escrita estiverem restritas):", err);
+        console.warn("Seed/Setup Error:", err);
       }
     };
 
     seedDatabase();
-
     return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-      setToast({ message: "Login realizado com sucesso!", type: 'success' });
+      setToast({ message: "Bem-vindo(a)!", type: 'success' });
     } catch (error) {
-      console.error("Login error:", error);
       setToast({ message: "Erro ao fazer login.", type: 'error' });
     }
   };
@@ -128,126 +119,80 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setToast({ message: "Você saiu da conta.", type: 'success' });
+      setToast({ message: "Você saiu.", type: 'success' });
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error(error);
     }
   };
 
   const handleClaimGift = async (giftId: string, name: string, isAnonymous: boolean) => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
-
+    if (!user) { handleLogin(); return; }
     try {
       const giftRef = doc(db, 'gifts', giftId);
       const giftSnap = await getDoc(giftRef);
-      
-      if (!giftSnap.exists()) {
-        setToast({ message: "Presente não encontrado.", type: 'error' });
-        return;
-      }
-
+      if (!giftSnap.exists()) return;
       const giftData = giftSnap.data() as Gift;
       const currentClaims = giftData.claims || [];
-      const maxQuantity = giftData.maxQuantity || 1;
-
-      if (currentClaims.length >= maxQuantity) {
-         setToast({ message: "Este presente já foi escolhido por completo.", type: 'error' });
+      if (currentClaims.length >= (giftData.maxQuantity || 1)) {
+         setToast({ message: "Este item já foi presenteado.", type: 'error' });
          return;
       }
+      const newClaim: GiftClaim = { userId: user.uid, name, isAnonymous, timestamp: Date.now() };
+      await updateDoc(giftRef, { claims: arrayUnion(newClaim) });
+      setToast({ message: "Obrigado pelo presente! ❤️", type: 'success' });
 
-      const hasAlreadyClaimed = currentClaims.some(c => c.userId === user.uid);
-      if (hasAlreadyClaimed) {
-        setToast({ message: "Você já escolheu este presente.", type: 'error' });
-        return;
-      }
-
-      const newClaim: GiftClaim = {
-        userId: user.uid,
-        name: name,
-        isAnonymous: isAnonymous,
-        timestamp: Date.now()
-      };
-
-      await updateDoc(giftRef, {
-        claims: arrayUnion(newClaim),
-        claimedBy: name, 
-        claimedByUserId: user.uid,
-        isAnonymous: isAnonymous
-      });
-
-      setToast({ message: "Presente marcado com sucesso! Obrigado!", type: 'success' });
-
-      // --- EMAIL NOTIFICATION ---
+      // Email notification logic
       const EMAILJS_SERVICE_ID = "casamentowevelley";   
       const EMAILJS_TEMPLATE_ID = "template_l9getos"; 
       const EMAILJS_PUBLIC_KEY = "VA3a0JkCjqXQUIec1";   
-      
       if (EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
-          const emailParams = {
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
             to_email: 'wevelleytwich@gmail.com',
             gift_name: giftData.name,
             guest_name: name,
-            guest_email: user.email,
-            is_anonymous: isAnonymous ? '(Marcado como anônimo no site)' : '',
+            is_anonymous: isAnonymous ? '(Anônimo)' : '',
             timestamp: new Date().toLocaleString('pt-BR')
-          };
-          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams, EMAILJS_PUBLIC_KEY).catch(console.error);
+          }, EMAILJS_PUBLIC_KEY).catch(console.error);
       }
-    } catch (error: any) {
-      console.error("Error claiming gift:", error);
+    } catch (error) {
       setToast({ message: "Erro ao marcar presente.", type: 'error' });
     }
   };
 
   const handleUnclaimGift = async (giftId: string) => {
     if (!user) return;
-
     try {
       const giftRef = doc(db, 'gifts', giftId);
       const giftSnap = await getDoc(giftRef);
       if (!giftSnap.exists()) return;
-
       const giftData = giftSnap.data() as Gift;
-      const currentClaims = giftData.claims || [];
-      const updatedClaims = currentClaims.filter(c => c.userId !== user.uid);
-      
-      const updates: any = { claims: updatedClaims };
-
-      if (updatedClaims.length === 0) {
-        updates.claimedBy = null;
-        updates.claimedByUserId = null;
-        updates.isAnonymous = false;
-      } else {
-        const lastClaim = updatedClaims[updatedClaims.length - 1];
-        updates.claimedBy = lastClaim.name;
-        updates.claimedByUserId = lastClaim.userId;
-        updates.isAnonymous = lastClaim.isAnonymous;
-      }
-
-      await updateDoc(giftRef, updates);
-      setToast({ message: "Presente desmarcado com sucesso.", type: 'success' });
+      const updatedClaims = (giftData.claims || []).filter(c => c.userId !== user.uid);
+      await updateDoc(giftRef, { claims: updatedClaims });
+      setToast({ message: "Presente desmarcado.", type: 'success' });
     } catch (error) {
-      console.error("Error unclaiming gift:", error);
-      setToast({ message: "Erro ao desmarcar presente.", type: 'error' });
+      setToast({ message: "Erro ao desmarcar.", type: 'error' });
     }
   };
 
   const handleDeleteGift = async (giftId: string) => {
     if (!user || !ADMIN_EMAILS.includes(user.email || '')) return;
-
-    if (!window.confirm("Tem certeza que deseja remover este presente da lista para sempre?")) {
-      return;
-    }
-
+    if (!window.confirm("Deseja mesmo remover este presente? Esta ação não pode ser desfeita.")) return;
     try {
       await deleteDoc(doc(db, 'gifts', giftId));
-      setToast({ message: "Presente removido da lista permanentemente.", type: 'success' });
+      setToast({ message: "Presente removido permanentemente.", type: 'success' });
     } catch (error) {
-      console.error("Error deleting gift:", error);
-      setToast({ message: "Erro ao remover presente. Verifique as permissões.", type: 'error' });
+      setToast({ message: "Erro ao remover.", type: 'error' });
+    }
+  };
+
+  const handleAddGift = async (newGift: Omit<Gift, 'id' | 'claims'>) => {
+    if (!user || !ADMIN_EMAILS.includes(user.email || '')) return;
+    try {
+      const id = `manual-${Date.now()}`;
+      await setDoc(doc(db, 'gifts', id), { ...newGift, id, claims: [] });
+      setToast({ message: "Novo presente adicionado!", type: 'success' });
+    } catch (error) {
+      setToast({ message: "Erro ao adicionar presente.", type: 'error' });
     }
   };
 
@@ -259,24 +204,8 @@ const App: React.FC = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-pureWhite text-fineBlack px-4 text-center">
-        <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
-        <h2 className="text-xl font-serif mb-2">Ops! Algo deu errado.</h2>
-        <p className="font-sans text-sm opacity-60">{error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-6 px-6 py-2 bg-serenity text-white rounded-sm font-sans text-sm uppercase tracking-wider hover:bg-serenityDark transition-colors"
-        >
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-pureWhite selection:bg-serenity selection:text-white">
+    <div className="min-h-screen bg-pureWhite">
       <Hero user={user} onLogin={handleLogin} onLogout={handleLogout} />
       <EventDetails />
       
@@ -285,7 +214,7 @@ const App: React.FC = () => {
         currentUser={user}
         title="Operação Lua de Mel"
         subtitle="Nossos Sonhos"
-        description="Se preferir não escolher um presente físico, ficaríamos imensamente felizes com sua contribuição para realizarmos a viagem dos nossos sonhos."
+        description="Ficaríamos imensamente felizes com sua contribuição para realizarmos a viagem dos nossos sonhos."
         image="https://dynamic-media-cdn.tripadvisor.com/media/photo-o/0f/34/dc/b8/photo0jpg.jpg?w=1000"
         icon={Plane}
         buttonText="Contribuir para a Viagem"
@@ -296,7 +225,7 @@ const App: React.FC = () => {
         currentUser={user}
         title="Eternizando Momentos"
         subtitle="Memórias Únicas"
-        description="Ajude-nos a guardar cada sorriso e emoção deste dia único. Sua contribuição será dedicada aos registros fotográficos que contam nossa história."
+        description="Ajude-nos a guardar cada sorriso e emoção deste dia único."
         image="https://images.pexels.com/photos/34933461/pexels-photo-34933461.jpeg"
         icon={Camera}
         buttonText="Contribuir para as Fotos"
@@ -311,18 +240,12 @@ const App: React.FC = () => {
         onClaim={handleClaimGift} 
         onUnclaim={handleUnclaimGift}
         onDelete={handleDeleteGift}
+        onAdd={handleAddGift}
         onLogin={handleLogin}
       />
       
       <Footer />
-
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 };
